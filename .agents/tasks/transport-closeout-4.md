@@ -1,0 +1,24 @@
+# Transport closeout 4 — remaining verified defects ONLY
+
+You are real local Claude Code, configured model unchanged. Sole writer src/mcp/**, src/bin/**, and .agents/reports/transport-closeout-4.md. No Cargo/runtime/backend/QA/tests outside mcp edits. No GUI/input/remote launches, commit/push/worktree, broad refactor, model/config changes. Previous transport writer MUST be verified stopped by coordinator before this task launches; all previous files are preserved.
+
+## Current already-working baseline (do not redo)
+- Worker enqueue provides deterministic admission with Receiver. Queue bound and old-generation worker-queued resume tests are GREEN; no unsafe or flood tests.
+- Explicit --mock-backend exists. Native default unchanged. Windows accepted sockets explicitly set_nonblocking(false) FIXED and previously verified live.
+- Strict jsonrpc version2.0, params, escaped requestId parsed; immediate reader EOF cancel exists; matched active-ID notification and pause/close directly cancel.
+- Worker call_with_deadline reuses enqueue; fresh resume after pause MUST succeed on FIRST request. cancelled_at/is_stale/take_stale “refuse first request once” heuristic was WRONG and REMOVED. Never restore it.
+- Full independent snapshot209passed2ignored, clippy -D warnings and fmt green (coordinator-all-tests-3/lint-status-3). Mac and Windows release snapshots build. They do NOT cover defects below.
+
+## Required remaining repairs, prioritized
+1. **Actual release MCP harness FAILED cancellation**:
+   `python3 tests/mcp_protocol.py --host target/release/computer-host --host-arg=--mock-backend`
+   coordinator-mcp-protocol-3.log,49passed1failed1skip. observe(wait_ms3000) immediately followed by notifications/cancelled returns clean image/isError=false. Root: active_request is only set by main on tool dispatch; reader can read request+cancel before main sets active, ignores cancel; main processes cancel after clearing active, also ignores it. Need bounded accepted/pending request cancellation tracking and race-free transition to active dispatch. A valid cancellation for a queued accepted id must refuse it before native work; cancellation for unrelated/stale ids must not cancel other active requests. Preserve method/params validation, arbitrary payload strings are not control. Do not change QA assertion to allow fake clean success, and do not add sleep to hide race.
+2. **Stop generation must be stamped at TRANSPORT ingress**: current worker enqueue generation only sees calls after raw reader->main backlog. Resume accepted into raw queue BEFORE pause/cancel must not clear later stop when dispatched. Carry acceptance epoch through real path or equivalently refuse stale resume; fresh explicit resume after pause acknowledgment must first-call succeed. Preserve all existing worker tests. No heuristic reject-once.
+3. **Overflow truly bounded + terminates**: stdio/TCP normal overflow sends one marker then main exits. BUT oversized-frame callback still sends unlimited markers on UNBOUNDED ctrl_tx after frame queue full; main ignores that ctrl variant. Both normal and oversized failure must share a one-shot overflow latch (Cell<bool> on reader thread is sufficient for closure borrowing) and cancel/refuse connection, not unbounded ctrl sends. TCP must shutdown both directions so clone reader cannot survive refused client and cancel a later client's session. Refused stdio exits rather than infinite drain. Prefer shared small ingress helper if it reduces duplication, not architecture rewrite.
+4. **Regression tests must drive real production stdio/TCP paths**, not copied test-only channels. Existing run_with_reader injectable input is available; output injection if needed must be same production loop. Use bounded gates, always-release guards; never sync call behind unreleased capture gate. Cover immediate queued-cancel, active cancel, irrelevant/escaped/spoofed ids, EOF while waiting, queued old resume vs fresh resume, normal/oversized overflow. Native timeout truthfulness/quarantine must stay.
+5. Minor Windows cfg warnings: hotkey.rs CancelBox/box_cancel_flag/free_cancel_box helpers only needed on macOS/test. Gate appropriately; do not blanket suppress dead_code.
+
+## Verification and exit
+- First run precise existing failure and keep red evidence. Then scoped mcp tests, cargo test --all-targets --offline, cargo clippy --all-targets --offline -- -D warnings, cargo fmt --check.
+- Build release and run unchanged independent MCP protocol harness; expect50pass0fail1explicit-skip(native lock), not an invented pass for native lock. Windows check/build can be coordinator-run after you freeze.
+- Keep total scope bounded; no rereading all prior transcript/history. Report exact files, root causes, commands and results; list unmet items truthfully. Freeze once done. Max task turns70; if budget nears, report concrete remaining code rather than pretending completed.

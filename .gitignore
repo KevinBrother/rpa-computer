@@ -1,0 +1,18 @@
+/target
+**/*.rs.bk
+.DS_Store
+
+# Multi-agent run transcripts and captured screenshots are sensitive /
+# machine-generated and must never be committed. Planning, contract, review
+# and report Markdown under .agents/ stays tracked.
+.agents/runs/
+**/captures/
+
+# Python helper caches
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Native acceptance-fixture build products (compiled by an independent
+# worker); fixture source stays tracked, binaries/objects do not.
+acceptance-fixture/build/

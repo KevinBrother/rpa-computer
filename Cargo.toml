@@ -1,0 +1,19 @@
+[package]
+name = "rpa-computer"
+version = "0.1.0"
+edition = "2021"
+description = "Cross-platform computer-use runtime: screenshot + input injection behind a cancellation-aware session runtime and MCP host"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+thiserror = "2"
+image = { version = "0.24.8", default-features = false, features = ["png"] }
+screenshots = "0.8"
+enigo = { version = "0.3", features = ["serde"] }
+
+[profile.release]
+strip = true
+lto = true

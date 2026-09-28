@@ -1,0 +1,9 @@
+# Surgical compile recovery only, first checkpoint
+You are real local Claude Code implementation worker, configured model unchanged. Cwd rpa-computer independent repo. NO commits/push/worktrees, no GUI/remote, no parentfiles, no globalconfig/model/authchanges. Other task writers are all exited. Write ONLY src/mcp/worker.rs + tests/transport_lifecycle.rs (remove two unused_mut only) + .agents/reports/compile-recovery-20260928.md.
+Task is SMALL: source previous writer stopped on429 midintegration. Current cargo check --all-targets --offline yields7errors in .agents/runs/coordinator-resume-check-20260928.log. Fix only constructors/call wiring now; do NOT redesign anything. Known exactlocations:
+- ActiveRequest now inner: Arc<Mutex<RequestTrackerInner>>, not current. Worker::start around485 creates activecurrent and separateTransportGate::new. Create gate first; ActiveRequest.inner must be cloned from SAME gate.inner, then store gate. Do not create separate tracker state.
+- active_request() around523 returns clone of self.active, not oldcurrentfield.
+- coordinator native_main around897 now needs7th RequestGeneration arg. Clone sharedgeneration before moveclosure and pass it. Keep coordinator'sgenerationusable.
+- WorkItem at1057 lifetimeclose and1151 shutdown: gen=native::CONTROL_GEN. dispatch_command itemat1225: gen = acceptedgen destructuredabove (do NOT restamp).
+- tests/transport_lifecycle.rs two unused_mut at88/116; remove onlymut.
+No other behavioralchanges, do not touch any other sourcefiles. Read only relevant ~line ranges and types; don't re-read hugeworker/wholecrate. First substantive edits within3toolcalls. Run cargo check --all-targets --offline; cargo test --test transport_lifecycle --offline. Record exactexitcodes; a failingtest is okay if honest (we fix next checkpoint). Do not run whole suite nor cargo fmt globally. Brief report + stop. <=10toolcalls target.
