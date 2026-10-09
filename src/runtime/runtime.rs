@@ -49,6 +49,7 @@ pub struct Runtime {
     session: Option<Session>,
     session_counter: u64,
     runtime_started: Instant,
+    feedback: Option<crate::feedback::FeedbackHandle>,
 }
 
 impl Runtime {
@@ -59,11 +60,26 @@ impl Runtime {
             session: None,
             session_counter: 0,
             runtime_started: Instant::now(),
+            feedback: None,
         }
     }
 
+    pub fn new_with_feedback(
+        backend: Box<dyn Backend>,
+        cancel: Arc<AtomicBool>,
+        feedback: crate::feedback::FeedbackHandle,
+    ) -> Self {
+        let backend = Box::new(crate::feedback::FactBackend::new(backend, feedback.clone()));
+        let mut runtime = Self::new(backend, cancel);
+        runtime.feedback = Some(feedback);
+        runtime
+    }
+
     pub fn call(&mut self, name: &str, args: Value) -> Reply {
-        match name {
+        if self.feedback.as_ref().is_some_and(|f| f.is_terminated()) {
+            return Reply::err(ToolError::new(codes::CANCELLED, "desktop feedback permanently revoked this Host child's control; establish a new connection"));
+        }
+        let reply = match name {
             tools::TOOL_DESCRIBE => self.describe(),
             tools::TOOL_OPEN => self.open(args),
             tools::TOOL_OBSERVE => self.observe(args),
@@ -76,6 +92,34 @@ impl Runtime {
                 codes::UNKNOWN_TOOL,
                 format!("unknown tool: {other}"),
             )),
+        };
+        self.sync_feedback();
+        if self.feedback.as_ref().is_some_and(|f| f.is_terminated())
+            && !reply.is_error
+            && matches!(
+                name,
+                tools::TOOL_OPEN | tools::TOOL_RESUME | tools::TOOL_OBSERVE
+            )
+        {
+            self.cancel.store(true, Ordering::SeqCst);
+            return Reply::err(ToolError::new(
+                codes::CANCELLED,
+                "desktop feedback revoked control during the native call",
+            ));
+        }
+        reply
+    }
+
+    fn sync_feedback(&self) {
+        if let (Some(f), Some(s)) = (&self.feedback, &self.session) {
+            use crate::feedback::RuntimePhase;
+            let phase = match s.state {
+                SessionState::Ready => RuntimePhase::Idle,
+                SessionState::Paused => RuntimePhase::Paused,
+                SessionState::Faulted => RuntimePhase::Faulted,
+                SessionState::Closed => RuntimePhase::Closed,
+            };
+            f.settle(&s.id, phase, s.geometry_ref());
         }
     }
 
@@ -83,21 +127,17 @@ impl Runtime {
 
     fn describe(&mut self) -> Reply {
         let platform = self.backend.platform();
-        // Permission/health preflight: geometry must be readable. This injects
-        // no input and takes no screenshot.
-        let (available, note) = match self.backend.geometry() {
-            Ok(_) => (true, Value::Null),
-            Err(e) => (false, json!({"code": e.code, "message": e.message})),
-        };
-        let mut data = capabilities(platform);
-        data["available"] = json!(available);
-        if !available {
-            data["preflight_error"] = note;
-        }
+        let mut data =
+            crate::runtime::display::describe(&mut *self.backend, capabilities(platform));
+        data["desktop_feedback"] = json!({"enabled": self.feedback.is_some(), "capture_exclusion_verified": false, "control_revoked": self.feedback.as_ref().is_some_and(|f| f.is_terminated())});
         Reply::ok(data, None)
     }
 
     fn open(&mut self, args: Value) -> Reply {
+        let selection = match crate::runtime::display::selection(&args) {
+            Ok(s) => s,
+            Err(e) => return Reply::err(e),
+        };
         if let Some(s) = &self.session {
             if s.state != SessionState::Closed {
                 return Reply::err(ToolError::new(
@@ -123,20 +163,46 @@ impl Runtime {
         // Deliberate new lease: a prior stop request must not silently block
         // a session the user explicitly opens, and the lifetime budget
         // restarts with the new session.
-        self.cancel.store(false, Ordering::SeqCst);
-        self.runtime_started = Instant::now();
 
         // Bind the surface and verify permissions without injecting input or
         // claiming any input success.
-        let geometry = match self.backend.geometry() {
+        let geometry = match self.backend.select_display(&selection) {
             Ok(g) => g,
             Err(e) => return Reply::err(ToolError::from(e)),
         };
 
+        let snapshot = match crate::runtime::display::check(&mut *self.backend, None) {
+            Ok(s) => s,
+            Err(e) => return Reply::err(e),
+        };
+        // A fresh query must still describe the selected geometry before grant.
+        match self.backend.geometry() {
+            Ok(current) if current == geometry => {}
+            Ok(_) => {
+                return Reply::err(ToolError::new(
+                    codes::GEOMETRY_CHANGED,
+                    "display changed during open",
+                ))
+            }
+            Err(e) => return Reply::err(ToolError::from(e)),
+        }
+        self.cancel.store(false, Ordering::SeqCst);
+        self.runtime_started = Instant::now();
         self.session_counter += 1;
         let id = format!("session-{}-{}", std::process::id(), self.session_counter);
-        let session = Session::new(id.clone(), geometry, (max_width, max_height));
+        let mut session = Session::new(id.clone(), geometry, (max_width, max_height));
+        session.display_generation = snapshot.as_ref().map(|s| s.generation());
+        session.display_selection = selection;
         let surface = session.surface_id().to_string();
+        if let Some(feedback) = &self.feedback {
+            if feedback.grant(&id, session.geometry_ref()).is_err() {
+                self.cancel.store(true, Ordering::SeqCst);
+                return Reply::err(ToolError::new(
+                    codes::CANCELLED,
+                    "desktop feedback refused the new session authority",
+                ));
+            }
+        }
         self.session = Some(session);
 
         let platform = self.backend.platform();
@@ -360,6 +426,13 @@ impl Runtime {
                 }
             }
         }
+        if let Err(e) =
+            crate::runtime::display::check(&mut *self.backend, session.display_generation)
+        {
+            session.state = SessionState::Faulted;
+            self.session = Some(session);
+            return Reply::err(e);
+        }
         // State validation before clearing the stop flag: the backend must
         // still answer and the geometry must not have changed while paused.
         // Identity AND dimensions are compared, not only the version string.
@@ -454,6 +527,25 @@ impl Runtime {
     /// Sets cancellation, releases held input, closes the session. Never
     /// reports a misleading success: cleanup failure is surfaced as an error.
     pub fn shutdown(&mut self) -> Reply {
+        let reply = self.shutdown_native();
+        if let Some(f) = &self.feedback {
+            use rpa_desktop_feedback::protocol::Cleanup;
+            let cleanup = match reply.data["cleanup_outcome"].as_str() {
+                Some("released") => Cleanup::Released,
+                Some("not_needed") => Cleanup::NotNeeded,
+                Some("failed") => Cleanup::Failed,
+                _ => Cleanup::Unknown,
+            };
+            if f.is_terminated() {
+                f.complete_terminal(cleanup);
+            } else {
+                f.retire(cleanup);
+            }
+        }
+        reply
+    }
+
+    fn shutdown_native(&mut self) -> Reply {
         self.cancel.store(true, Ordering::SeqCst);
         let Some(mut session) = self.session.take() else {
             return Reply::ok(

@@ -1,0 +1,9 @@
+实现纯离线诊断分析器，禁止GUI输入和部署。真实Claude CLI + 当前GLM；不commit/push不改全局设置。独占写入 scripts/analyze-layered-gui.py、tests/layered_gui_analyzer.py、.agents/reports/layered-evidence-analyzer-20260930.md。其他文件包括fixture/src禁止改。
+
+用户已批准拆开视觉和输入测试。fixture的oracle每行JSONL(type/session/trial/hit/wrong/text_check)，事件有UTC ts,trial,nonce,suite,case_id,case_index,case_total，trial额外expected_text，check有matched,expected_text,actual_text,actual_utf16_hex,expected_utf16_hex。仅协调者可读oracle。agent是Claude stream-json，顶层assistant.message.content[].tool_use里computer_step.input.action={kind:text_input,text:...}；动作也有mouse_click/key_chord等。assistant.model需核验glm-5.3-flash。顶层user.message.content tool_result可能有JSON嵌套字符串和image base64，不能日志打印图片。旧oracle可能BOM，新也处理utf8-sig。
+
+CLI --oracle PATH --transcript PATH --output PATH [--catalog PATH] （catalog全suite case列表、known字段task_payload/expected_text）。按时间/工具顺序对齐每case的text_input+text_check，保留多次attempt但不要把同case重试当独立成功。不得把无check或超时截断当通过。报告每suite case_count,attempts,first_attempt_exact,final_exact,hit_count,missing/case ids和failures。记录每次 model_payload、expected、actual 对比：payload != expected表示识别/任务参数先有偏差（known要用catalog task_payload并normalizeCRLF预期）；actual != normalized_payload表示输入/应用差异；expected==actual才是最终exact。如果对齐不足输出unknown，不强行判注入正常。每一步三方比较必须可追溯，不仅看matched布尔；校验oracle expected/actual_utf16_hex与真实str计算一致，若不一致失败。不要Unicode归一化/strip text。首次known输入CRLF应normalize到LF（单CR也按契约处理，先读取runtime plan确认但不可改src）。timestamp跨Windows7位小数/mac秒，事件count相同时不能乱对齐：如果同timestamp有多条payload/check可能输出unknown而非盲选。
+
+模型使用多个session记录也可，但不能误把嵌套duplicate tool_use重复计数；仅assistant顶层content的tool_use计数。输出声明这是文本/oracle诊断，不替代严格工具策略审计、不证明截图看起来正确；不把同case重试洗成first-pass。
+
+TDD：用合成纯fixture至少覆盖精确成功、视觉参数错误、应用与payload不一致、knownCRLF正确、NBSP差异、NFC/NFD差异、未完成case、重复check/重试不提升first-pass、错误UTF16hex、无法时间对齐、BOM、wrong model、empty/missing result标记。执行python3 tests/layered_gui_analyzer.py，报告命令结果。只写自己的文件，无GUI。

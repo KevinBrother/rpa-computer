@@ -1,0 +1,2 @@
+mcs -langversion:5 -target:winexe -out:<this-dir>/ComputerUseAcceptance.focus.compile-only.exe -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll acceptance-fixture/windows/MainForm.cs acceptance-fixture/windows/Cases.cs acceptance-fixture/windows/Gesture*.cs acceptance-fixture/windows/Basic*.cs acceptance-fixture/windows/Focus*.cs
+PYTHONPYCACHEPREFIX=<this-dir>/pycache python3 -m py_compile scripts/analyze-focus-gui.py tests/focus_gui_analyzer.py

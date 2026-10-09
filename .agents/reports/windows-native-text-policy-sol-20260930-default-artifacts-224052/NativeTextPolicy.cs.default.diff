@@ -1,0 +1,10 @@
+--- acceptance-fixture/windows/NativeTextPolicy.cs.opt-in
++++ acceptance-fixture/windows/NativeTextPolicy.cs.default
+@@ -1,5 +1,5 @@
+-// Opt-in Windows sidecar expected policy. Does NOT change CaseContract or catalog.
+-// Build with WINDOWS_NATIVE_TEXT_POLICY_V1; old build helpers retain canonical behavior.
++// Default Windows native expected policy. Does NOT change CaseContract or catalog.
++// Included by build-windows.ps1; no opt-in flag or canonical runtime fallback.
+ using System;
+ namespace AcceptanceFixture {
+     static class NativeTextPolicy {

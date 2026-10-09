@@ -1,0 +1,242 @@
+[
+  {
+    "path": "acceptance-fixture/windows/GestureCases.cs",
+    "before": "456108a7ab12640ca1abbddc7a27fa2f8923af185e926d1ccb5208050bddbebe",
+    "after": "456108a7ab12640ca1abbddc7a27fa2f8923af185e926d1ccb5208050bddbebe",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicForm.cs",
+    "before": "fe066d214c9d620df1ae2ac37dfeed5e68344b95cf9d7dc2e08d8c1b75cd431a",
+    "after": "fe066d214c9d620df1ae2ac37dfeed5e68344b95cf9d7dc2e08d8c1b75cd431a",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/GestureForm.cs",
+    "before": "6772609f0869615ce9ca400f0089a7a22727f5a4b2bc7fc11f39f1b852434082",
+    "after": "6772609f0869615ce9ca400f0089a7a22727f5a4b2bc7fc11f39f1b852434082",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusRegression.cs",
+    "before": "b48b2aaf061ab8e0bfd45feecd0a65ebf49145464a50f0821c40425570dd6068",
+    "after": "b48b2aaf061ab8e0bfd45feecd0a65ebf49145464a50f0821c40425570dd6068",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusWindows.cs",
+    "before": "a98aceb2a606ec765932e4fb3194cbcc20f4317304b708a91595f05590ebae17",
+    "after": "a98aceb2a606ec765932e4fb3194cbcc20f4317304b708a91595f05590ebae17",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicSelfTest.cs",
+    "before": "cd94a48f450952bfe79aa2a73453e8138fa3af32f080ae9a088f9df224c32a8b",
+    "after": "cd94a48f450952bfe79aa2a73453e8138fa3af32f080ae9a088f9df224c32a8b",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicJudge.cs",
+    "before": "d9783bef6b210d0c7bae25090b416081a855afbc60ef24f5c3023e8542b8cc49",
+    "after": "d9783bef6b210d0c7bae25090b416081a855afbc60ef24f5c3023e8542b8cc49",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/Cases.cs",
+    "before": "6bf1a8e1b33016f5dddde78a7350550b82914b8753dabd475bc217d40af44909",
+    "after": "6bf1a8e1b33016f5dddde78a7350550b82914b8753dabd475bc217d40af44909",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusSelfTest.cs",
+    "before": "39ad3fc966a721b214ce3ed8d33268481bc41060f9f08519e4a23a94799de653",
+    "after": "39ad3fc966a721b214ce3ed8d33268481bc41060f9f08519e4a23a94799de653",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusNative.cs",
+    "before": "498730fc32e7ff4f693a59d3ad0106ddf84da1a8ca2fe1c5542184fcfa8d98ff",
+    "after": "498730fc32e7ff4f693a59d3ad0106ddf84da1a8ca2fe1c5542184fcfa8d98ff",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusCases.cs",
+    "before": "7b0e18d6c7c4854f6b2a7407780c8c0f15ee23a596e7d7584b964b83457f05f4",
+    "after": "7b0e18d6c7c4854f6b2a7407780c8c0f15ee23a596e7d7584b964b83457f05f4",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicArguments.cs",
+    "before": "31dbdd36ed71caa50d79a85e1acc7d0b2c6e33f2da177a1116566d341b3fdf59",
+    "after": "31dbdd36ed71caa50d79a85e1acc7d0b2c6e33f2da177a1116566d341b3fdf59",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicCases.cs",
+    "before": "9a40ca4bed926cf4da2cda2e3cdc4429cba6f1d04ec392e261e08c3f965fa6d1",
+    "after": "9a40ca4bed926cf4da2cda2e3cdc4429cba6f1d04ec392e261e08c3f965fa6d1",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/GestureNative.cs",
+    "before": "686212d5d0d6622504de5e3d6eaadd40a7990209ce1d4ae374abb6a1c8d256d2",
+    "after": "686212d5d0d6622504de5e3d6eaadd40a7990209ce1d4ae374abb6a1c8d256d2",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/GestureSelfTest.cs",
+    "before": "612d2e8fd5bb8c506429402ba2e89d20273756fbb5a5e1635ce9f777c04e5d0a",
+    "after": "612d2e8fd5bb8c506429402ba2e89d20273756fbb5a5e1635ce9f777c04e5d0a",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusJudge.cs",
+    "before": "6696b7e1a9907cd577035ff1f6b77c7e29d48a8972b52728a34c74f5ebcfa9dc",
+    "after": "6696b7e1a9907cd577035ff1f6b77c7e29d48a8972b52728a34c74f5ebcfa9dc",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/GestureJudge.cs",
+    "before": "63920ae7d9667ac8696220c7e61211be89a2d16e24911b13e63adead6ac299b4",
+    "after": "63920ae7d9667ac8696220c7e61211be89a2d16e24911b13e63adead6ac299b4",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusForm.cs",
+    "before": "d18d887cc2e5389037f8b16985866f13d313c7c3992679f4734629478efa8447",
+    "after": "d18d887cc2e5389037f8b16985866f13d313c7c3992679f4734629478efa8447",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicNative.cs",
+    "before": "5c1def6ef4ba51c76522474549d41471f0f0b32206cc1f47f78680475c2b48f8",
+    "after": "5c1def6ef4ba51c76522474549d41471f0f0b32206cc1f47f78680475c2b48f8",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/macos/GestureCases.swift",
+    "before": "c5d3a98e9ae09b7c87c4d1f70a4bf4e3688b56f1847748d3406434a081b8e0d0",
+    "after": "c5d3a98e9ae09b7c87c4d1f70a4bf4e3688b56f1847748d3406434a081b8e0d0",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/macos/GestureController.swift",
+    "before": "abfb363198b57619eee0237390b2be4049f49878046bc2b52bf31c03b46bfb19",
+    "after": "abfb363198b57619eee0237390b2be4049f49878046bc2b52bf31c03b46bfb19",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/macos/GestureJudge.swift",
+    "before": "f01d9d1f97441c07ff9e4c7bfd3f6e46d1d84b060384d5ca48132f6bf6f363ae",
+    "after": "f01d9d1f97441c07ff9e4c7bfd3f6e46d1d84b060384d5ca48132f6bf6f363ae",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/macos/GestureViews.swift",
+    "before": "cfe155ba3a8998ad643770e9265f419a7040035d510bb4c87edd0bd6464887f1",
+    "after": "cfe155ba3a8998ad643770e9265f419a7040035d510bb4c87edd0bd6464887f1",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/macos/GestureSelfTest.swift",
+    "before": "e34c613e5deb7c998ac7c546df4013e48919377d74372ea055cbc25195e78bdb",
+    "after": "e34c613e5deb7c998ac7c546df4013e48919377d74372ea055cbc25195e78bdb",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/macos/Cases.swift",
+    "before": "ddeac570dcb252acf6c3870eb6ff176cc9c38d71586322acba90ab871c17a41a",
+    "after": "ddeac570dcb252acf6c3870eb6ff176cc9c38d71586322acba90ab871c17a41a",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/macos/GestureExporter.swift",
+    "before": "e19379f9f0cb804a7c36c357f92e331e46e0059bcf6627c3e2280b4a53993668",
+    "after": "e19379f9f0cb804a7c36c357f92e331e46e0059bcf6627c3e2280b4a53993668",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/macos/main.swift",
+    "before": "45a17f4beaa3ae820940565617ed4c28c3e2365f87dae6c7b5ad3ad5742cdd1a",
+    "after": "45a17f4beaa3ae820940565617ed4c28c3e2365f87dae6c7b5ad3ad5742cdd1a",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/macos/GestureRegression.swift",
+    "before": "808a89c33b436e3ee15d46e34ee92414c64a987352d819c4aa07d3de99c62060",
+    "after": "808a89c33b436e3ee15d46e34ee92414c64a987352d819c4aa07d3de99c62060",
+    "unchanged": true
+  },
+  {
+    "path": "scripts/analyze-layered-gui.py",
+    "before": "3c2ac39a34d4843e594e4000a94c70498bdbe0a2fd9fbbabf71adf4d6c314c95",
+    "after": "3c2ac39a34d4843e594e4000a94c70498bdbe0a2fd9fbbabf71adf4d6c314c95",
+    "unchanged": true
+  },
+  {
+    "path": "scripts/analyze-focus-gui.py",
+    "before": "5cab0102f0b9c5841a42f0b20fb8603f74bc01eacc8d5b0cb40d94422f342474",
+    "after": "5cab0102f0b9c5841a42f0b20fb8603f74bc01eacc8d5b0cb40d94422f342474",
+    "unchanged": true
+  },
+  {
+    "path": "scripts/analyze-basic-input-gui.py",
+    "before": "630c2f611de4b22e018748ebcea185dc87ef2369b0adf0f085cf0a5ad6d8bd4c",
+    "after": "630c2f611de4b22e018748ebcea185dc87ef2369b0adf0f085cf0a5ad6d8bd4c",
+    "unchanged": true
+  },
+  {
+    "path": "tests/focus_gui_analyzer.py",
+    "before": "275a0867b38c3939512f40105e9e45d246c057b954c9c30a9cbd9ddc19096132",
+    "after": "275a0867b38c3939512f40105e9e45d246c057b954c9c30a9cbd9ddc19096132",
+    "unchanged": true
+  },
+  {
+    "path": "tests/basic_input_gui_analyzer.py",
+    "before": "cb91d5a8feffc26c5e45b9ae725a0444cc59f910ee0560633a8b100063fe25d9",
+    "after": "cb91d5a8feffc26c5e45b9ae725a0444cc59f910ee0560633a8b100063fe25d9",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/tools/check-cases-parity.py",
+    "before": "0e1d7422362ca2cfd0049c46d9d8b186931bbf86c1486de850fafd21be038549",
+    "after": "0e1d7422362ca2cfd0049c46d9d8b186931bbf86c1486de850fafd21be038549",
+    "unchanged": true
+  },
+  {
+    "path": ".agents/runs/layered-win-known-input-final-frame-20260930.png",
+    "before": "4ad39993d152927dd302767c8b182bfe5879f175647cb42d508194e684953f49",
+    "after": "4ad39993d152927dd302767c8b182bfe5879f175647cb42d508194e684953f49",
+    "unchanged": true
+  },
+  {
+    "path": ".agents/runs/layered-win-known-input-final-summary-20260930.json",
+    "before": "1c0d56155ba8d921d8a492ac50d0b81399ac1959b80466e7cf7291be481796e7",
+    "after": "1c0d56155ba8d921d8a492ac50d0b81399ac1959b80466e7cf7291be481796e7",
+    "unchanged": true
+  },
+  {
+    "path": ".agents/runs/layered-win-known-input-final-transcript-20260930.jsonl",
+    "before": "2dcb3e3d180f1a35953eefee003c836a36fca7e6a96ef32ad7c78707fd1186e6",
+    "after": "2dcb3e3d180f1a35953eefee003c836a36fca7e6a96ef32ad7c78707fd1186e6",
+    "unchanged": true
+  },
+  {
+    "path": ".agents/runs/layered-win-known-input-final-oracle-20260930.jsonl",
+    "before": "ff789c788e7ba29f69888f19bddd29ae6975bf43170b736164e51c85295d6add",
+    "after": "ff789c788e7ba29f69888f19bddd29ae6975bf43170b736164e51c85295d6add",
+    "unchanged": true
+  },
+  {
+    "path": ".agents/runs/layered-win-known-input-final-audit-20260930.log",
+    "before": "248ace38ecf3b4ada55b4149f3c6f05ced9eda1bb9fe2c84af2be3d2ad3d9f5c",
+    "after": "248ace38ecf3b4ada55b4149f3c6f05ced9eda1bb9fe2c84af2be3d2ad3d9f5c",
+    "unchanged": true
+  },
+  {
+    "path": ".agents/runs/layered-win-known-input-final-analysis-20260930.json",
+    "before": "5ecbfa5eb385c3978b785df329a3ad2a5f0ec1b9a6767e6cfa079e4ef20c39d1",
+    "after": "5ecbfa5eb385c3978b785df329a3ad2a5f0ec1b9a6767e6cfa079e4ef20c39d1",
+    "unchanged": true
+  }
+]

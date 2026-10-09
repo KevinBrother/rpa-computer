@@ -1,0 +1,11 @@
+--- acceptance-fixture/build-windows.ps1.before-red-repair
++++ acceptance-fixture/build-windows.ps1.repaired
+@@ -28,7 +28,7 @@
+ 
+ & $csc /nologo /langversion:5 /codepage:65001 /target:winexe /platform:anycpu /utf8output /optimize+ `
+     /out:"$exe" "$src" "$srcCases" $gestureSources $basicSources $focusSources $nativeTextSources `
+-    /reference:System.dll,System.Drawing.dll,System.Windows.Forms.dll
++    /reference:System.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll
+ if ($LASTEXITCODE -ne 0) { throw "csc failed with exit code $LASTEXITCODE" }
+ 
+ Write-Host "built: $exe"

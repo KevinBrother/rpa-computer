@@ -2,7 +2,9 @@
 //! injected event and can be scripted to fail at chosen points. Never touches
 //! a real desktop.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
+
+pub(crate) mod race;
 
 use crate::backend::{Backend, BackendError, Capture, Direction, Geometry, InputEvent};
 
@@ -15,6 +17,7 @@ pub enum Recorded {
 }
 
 pub struct FakeBackend {
+    display: crate::backend::display::single::SingleDisplay,
     pub geometry: Geometry,
     pub png: Vec<u8>,
     pub recorded: Vec<Recorded>,
@@ -33,6 +36,10 @@ pub struct FakeBackend {
     /// "screenshot error after input was dispatched".
     pub fail_capture_after: Option<usize>,
     capture_calls: usize,
+    /// Test-only successful key-press checkpoint, after validation/recording.
+    pub after_key_press_gate: Option<std::sync::Arc<race::RaceGate>>,
+    /// Simulated held-state authority, cleared only by successful releases.
+    pub held_keys: BTreeSet<String>,
 }
 
 pub fn fake_png(width: u32, height: u32) -> Vec<u8> {
@@ -55,6 +62,9 @@ impl FakeBackend {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
             geometry: fake_geometry(),
+            display: crate::backend::display::single::SingleDisplay::new(
+                rpa_display_topology::NativeUnit::PhysicalPixels,
+            ),
             png: fake_png(width, height),
             recorded: Vec::new(),
             fail_inject_at: VecDeque::new(),
@@ -65,6 +75,8 @@ impl FakeBackend {
             pending_version: None,
             fail_capture_after: None,
             capture_calls: 0,
+            after_key_press_gate: None,
+            held_keys: BTreeSet::new(),
         }
     }
 
@@ -93,6 +105,22 @@ impl FakeBackend {
 }
 
 impl Backend for FakeBackend {
+    fn display_snapshot(
+        &mut self,
+    ) -> Result<Option<rpa_display_topology::TopologySnapshot>, BackendError> {
+        let g = self.geometry()?;
+        let size = crate::runtime::image::decode_png(&self.png)
+            .map_err(|e| be("capture_error", &e.message))?;
+        self.display
+            .snapshot(
+                &g,
+                rpa_display_topology::PixelSize {
+                    width: size.width,
+                    height: size.height,
+                },
+            )
+            .map(Some)
+    }
     fn platform(&self) -> &'static str {
         "fake"
     }
@@ -149,8 +177,12 @@ impl Backend for FakeBackend {
             InputEvent::Button {
                 button,
                 direction: _,
+                click_count,
             } => {
                 crate::backend::keys::parse_button(button)?;
+                if !rpa_native_input::is_valid_click_count(*click_count) {
+                    return Err(be("invalid_button", "click_count must be in 1..=3"));
+                }
             }
             InputEvent::Text { text } => {
                 crate::backend::keys::validate_text(text)?;
@@ -158,6 +190,19 @@ impl Backend for FakeBackend {
             _ => {}
         }
         self.recorded.push(Recorded::Event(event.clone()));
+        if let InputEvent::Key { key, direction } = event {
+            match direction {
+                Direction::Press => {
+                    self.held_keys.insert(key.clone());
+                    if let Some(gate) = self.after_key_press_gate.take() {
+                        gate.checkpoint().map_err(|e| be("test_gate_timeout", e))?;
+                    }
+                }
+                Direction::Release => {
+                    self.held_keys.remove(key);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -165,7 +210,10 @@ impl Backend for FakeBackend {
         self.recorded.push(Recorded::ReleaseAll);
         match &self.fail_release_all {
             Some(e) => Err(e.clone()),
-            None => Ok(()),
+            None => {
+                self.held_keys.clear();
+                Ok(())
+            }
         }
     }
 }
@@ -184,6 +232,10 @@ pub fn is_press(e: &InputEvent, name: &str) -> bool {
         InputEvent::Key { key, direction: Direction::Press } if key == name
     ) || matches!(
         e,
-        InputEvent::Button { button, direction: Direction::Press } if button == name
+        InputEvent::Button {
+            button,
+            direction: Direction::Press,
+            ..
+        } if button == name
     )
 }

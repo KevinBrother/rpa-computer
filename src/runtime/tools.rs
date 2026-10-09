@@ -145,11 +145,16 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         ToolDefinition {
             name: TOOL_OPEN.into(),
             description: format!(
-                "Open a control session bound to the primary display surface and return its session_id, capabilities, and state. This checks capture/input permissions but injects NO input and takes NO screenshot; call computer_observe for the first image. Only one session may be open at a time. Opening clears any previously requested stop. {OBSERVATION_PROVENANCE}"
+                "Open a control session bound to display: primary (default), an exact id, or the full desktop and return its session_id, capabilities, and state. This checks capture/input permissions but injects NO input and takes NO screenshot; call computer_observe for the first image. Only one session may be open at a time. Opening may clear a recoverable cancellation after validation; a desktop-feedback emergency stop permanently revokes this Host child and cannot be reopened. {OBSERVATION_PROVENANCE}"
             ),
             input_schema: json!({
                 "type": "object",
                 "properties": {
+                    "display": {"oneOf":[
+                        {"type":"object","properties":{"kind":{"const":"primary"}},"required":["kind"],"additionalProperties":false},
+                        {"type":"object","properties":{"kind":{"const":"desktop"}},"required":["kind"],"additionalProperties":false},
+                        {"type":"object","properties":{"kind":{"const":"id"},"id":{"type":"string","minLength":1,"maxLength":128}},"required":["kind","id"],"additionalProperties":false}
+                    ],"description":"Select primary (default), an exact runtime display ID, or the entire active desktop. No silent fallback."},
                     "max_width": {"type": "integer", "minimum": 16, "maximum": MAX_OPEN_DIMENSION, "default": 1366, "description": "Upper bound in pixels for observation image width. Captures are proportionally downscaled to fit; the returned width_px/height_px are always the true size of the returned image."},
                     "max_height": {"type": "integer", "minimum": 16, "maximum": MAX_OPEN_DIMENSION, "default": 768, "description": "Upper bound in pixels for observation image height."},
                 },
@@ -159,7 +164,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         ToolDefinition {
             name: TOOL_OBSERVE.into(),
             description: format!(
-                "Capture the current screen and return a PNG image plus metadata: observation_id, surface_id, geometry_version, input_sequence, width_px, height_px. The returned image block and the width_px/height_px metadata describe the SAME image. Use the observation_id as based_on for the next computer_step. {OBSERVATION_PROVENANCE}"
+                "Capture the current screen and return a PNG image plus metadata: observation_id, surface_id, geometry_version, input_sequence, width_px, height_px, and when supported full topology_generation, native_unit, selected_display_ids and per-display mapping_regions. Gaps/padding are not input targets. The returned image block and the width_px/height_px metadata describe the SAME image. Use the observation_id as based_on for the next computer_step. {OBSERVATION_PROVENANCE}"
             ),
             input_schema: json!({
                 "type": "object",

@@ -1,0 +1,10 @@
+--- acceptance-fixture/windows/MainForm.cs (before StageA)
++++ acceptance-fixture/windows/MainForm.cs (StageA)
+@@ -490,6 +490,7 @@
+                 var results = SelfTest.Run();
+                 results.AddRange(GestureSelfTest.Run());
+                 results.AddRange(BasicSelfTest.Run());
++                results.AddRange(FocusSelfTest.Run());
+                 int failed = 0;
+                 foreach (var r in results)
+                 {

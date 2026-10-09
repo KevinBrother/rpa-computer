@@ -1,0 +1,3 @@
+ef3e484291eccf45ba1a9df58397cd869af9a291f4bc977dace3737e26e0b3a1  acceptance-fixture/windows/GeometrySelfTest.cs
+0b2a1980d828d6cfd82b126a787fdc5c91444c2b2defe5234503a0e13a8b65e9  acceptance-fixture/windows/MainForm.cs
+837f61ea553dc8fa9064c1b231719549dde1d80e3b136a89efd64c85f31bab84  acceptance-fixture/build-windows.ps1

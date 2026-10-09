@@ -1,0 +1,11 @@
+[package]
+name = "rpa-display-topology"
+version = "0.1.0"
+edition = "2021"
+description = "Pure display topology, budgeted capture planning and per-region input mapping"
+license = "MIT"
+
+# Standalone: does not enroll in, or modify, the Host workspace.
+[workspace]
+
+[dependencies]

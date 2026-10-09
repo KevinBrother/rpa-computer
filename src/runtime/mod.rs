@@ -2,6 +2,8 @@
 //! truthful step results, bounded memory. No model or MCP dependencies.
 
 pub mod actions;
+pub(crate) mod display;
+pub(crate) mod display_input;
 pub mod error;
 pub mod execute;
 pub mod image;

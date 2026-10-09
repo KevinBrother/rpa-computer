@@ -188,7 +188,31 @@ GUI 通道不受 sandbox-exec 约束。缓解措施是受控测试桌面（不�
 打包、argv 策略、真实形状转录审计、端到端假 claude 沙箱运行、Windows 启停脚本
 所有权静态检查、mcp_protocol.py 对隔离假 host 的端到端自测；纯脚本，不启动 GUI）。
 
-## Windows 远程测试（协调者执行）
+## Windows 远程直连（首选路径，协调者执行）
+
+**首选：TLS 直连**——本地 Claude 只连**本地** `computer-client`（stdio MCP），
+Client 经 **TLS 保护的换行 JSON-RPC + 共享 Token** 直连 Windows 上的原生
+`computer-host`；SSH 仅用于部署/启动/停止/取日志，**不做端口转发**。完整步骤
+（凭据生成、Windows Host 部署与交互式计划任务启动、Client 打包、诊断命令）见
+**[docs/remote-connection.md](docs/remote-connection.md)**；示例：
+
+```bash
+scripts/remote-credentials.py --output-dir ~/rpa-remote-creds --server-name rpa-host.lan
+scripts/package-remote-client.sh --binary target/release/computer-client \
+    --release-dir /tmp/rpa-remote-client-release --connect <WIN_IP>:8399 \
+    --server-name rpa-host.lan --ca-cert ~/rpa-remote-creds/client/ca.pem \
+    --token-file ~/rpa-remote-creds/client/client.token
+```
+
+**验证口径区分**：`tests/remote_packaging.py` 与 docs/remote-connection.md 第 5 节
+的诊断命令（TCP 可达、openssl 握手/主机名校验）只验证**协议/传输/打包**层面；
+真实模型"看懂截图并正确操作 GUI"的**端到端验收是另一条独立门禁**，协议验证通过
+不代表 GUI 任务正确，两者分别报告（本 README 顶部验证状态照旧）。
+
+## Windows 远程测试（旧环回隧道方案，**仅遗留诊断用途**）
+
+以下 SSH 端口转发（`-L` 环回隧道）路径是直连方案落地前的旧流程，**保留仅作诊断
+对照**；正常远程使用请走上一节的 TLS 直连，不要再用 `-L` 转发：
 
 ```bash
 scripts/discover-windows-toolchain.sh acer-win   # 只读探查构建工具
@@ -221,3 +245,45 @@ WTS API 选取当前活动控制台会话，以该会话中 explorer.exe 的**�
 - 截图经 Claude Code 发送到用户配置的模型服务；本项目不约束其留存策略。
 - 本机紧急停止热键若注册失败会明确报告，不声称等价于远程 Ctrl+C。
 - 会话总预算 10 分钟、单步 15 秒等上限见设计文档第 5 节。
+
+## 可选 desktop feedback（Host 接线；Windows 待独立验收）
+
+默认关闭。Off 不查找 renderer 文件、不启动反馈进程或 I/O 线程，不请求反馈 UI 权限；
+`native-input` 不依赖反馈库。明确启用示例（路径属于**被控 Windows Host**）：
+
+```powershell
+.\computer-host.exe --desktop-feedback 'C:\RPA\desktop-feedback.exe' --feedback-accent '#2288aa' --feedback-label 'AI control'
+```
+
+`--desktop-feedback PATH`、`--feedback-accent '#RRGGBB'`、`--feedback-label TEXT`
+可同样加到 `--remote-listen` supervisor 配置。路径和样式通过独立 argv 传入每个 owned
+stdio child；renderer 在该 child 的交互式 Windows desktop 启动，而不是控制端 Mac。
+不向 renderer 传 TLS/token 参数或 Host 认证环境。Style 选项不能单独开启反馈。
+`--describe` 只报告配置，不加载/启动 renderer。
+
+Enabled 必须在 5 秒内收到有效 ready；缺文件、无 ready、协议错误、
+`capture_exclusion=unsupported` 拒绝启动，不降级成 off。
+`requested` 仅表示 renderer 平台排除 API 设置成功，**不是真实截图排除已验证**。
+当前 macOS 的 screenshots capture 没有 exact renderer-PID 过滤：enabled 明确报
+`capture_exclusion_unsupported`；新 capture crate 的后续接线不阻塞 Windows 交付。
+Linux 默认 renderer 不在本批支持/测试范围。
+
+快照仅包含 Host 生成的 session/generation、真实 Runtime 状态、几何与成功 Backend
+派发后的 pointer；不发送文本、键内容、应用标题、截图或凭据。原生 input 单位不是
+截图像素。latest 单槽可合并短状态，不承诺每一个 pointer/phase 都显示在屏幕上。
+
+Stop 验证当前 session+generation 并永久撤销**当前 Host child**的控制权，再通知现有
+cancel/worker epoch/Quit；旧动作及新的 open/resume 也不能清除该撤销。新授权要求新 Host
+或 remote supervisor 的显式新连接。暂停/普通 close 不等同 terminal Stop。
+renderer EOF、失联、5 秒 heartbeat 超时、坏帧/控制溢出、或单帧写入堵塞 5 秒，同样 fail-stop。
+输入线程不等待 renderer 管道；reader、writer、控制邮箱与存储都有上界。
+
+`stopping/pending` 必须等待实际 native cleanup。release 失败是 faulted/failed；
+放弃等待或 quarantine 是 faulted/unknown，迟到的 release 不能清除 unknown。
+子进程退出/消息发送成功不是释放证明。Host cleanup unconfirmed 返回非零；remote
+supervisor 对 worker exit 7 或被迫 kill 的 child quarantine，而不是继续授予控制。
+
+测试/验收执行统一由 CC+GLM 在 Windows 完成；新增普通 Rust tests 使用 in-memory mock，
+专项私有 fake renderer tests 被显式 `#[ignore]`，不产生 GUI/capture/input，也不构成真实
+ready/capture 排除证明。具体构建/执行命令和未验证门禁见
+`.agents/reports/desktop-feedback-host-sol-20260930.md`。

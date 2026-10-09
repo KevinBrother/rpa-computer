@@ -1,0 +1,24 @@
+[package]
+name = "rpa-windows-display"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "PMv2-verified Windows display enumeration, budgeted GDI capture and topology-driven composition"
+
+[workspace]
+
+[dependencies]
+rpa-display-topology = { path = "../display-topology" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+image = { version = "0.24", default-features = false, features = ["png"] }

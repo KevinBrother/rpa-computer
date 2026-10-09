@@ -85,6 +85,19 @@ pub fn execute_plan(
     cancel: &Arc<AtomicBool>,
     config: &ExecutionConfig,
 ) -> ExecutionOutcome {
+    execute_plan_guarded(plan, backend, map, cancel, config, |_, _| Ok(()))
+}
+
+/// Production display authority check before EVERY atomic event. Cleanup
+/// releases deliberately bypass this guard: stale geometry cannot forbid release.
+pub fn execute_plan_guarded(
+    plan: &Plan,
+    backend: &mut dyn Backend,
+    map: impl Fn([i32; 2]) -> (i32, i32),
+    cancel: &Arc<AtomicBool>,
+    config: &ExecutionConfig,
+    mut guard: impl FnMut(&mut dyn Backend, usize) -> Result<(), ToolError>,
+) -> ExecutionOutcome {
     let events_total = plan
         .events
         .iter()
@@ -172,6 +185,37 @@ pub fn execute_plan(
                     dispatched_all = false;
                     break;
                 }
+                if let Err(e) = guard(backend, index) {
+                    out.error = Some(e);
+                    out.cancelled = true;
+                    dispatched_all = false;
+                    do_release_pass(
+                        plan,
+                        backend,
+                        &map,
+                        index,
+                        plan.events.len(),
+                        &deadline,
+                        &mut out,
+                    );
+                    break;
+                }
+                // Stop can arrive during a blocking topology query.
+                if cancel.load(Ordering::SeqCst) {
+                    out.cancelled = true;
+                    dispatched_all = false;
+                    break;
+                }
+                // Enumeration is synchronous: a valid topology result must
+                // not authorize input after the input-phase budget expired.
+                if Instant::now() > deadline {
+                    out.error = Some(ToolError::new(
+                        codes::DEADLINE_EXCEEDED,
+                        "input phase exceeded its time budget during topology validation",
+                    ));
+                    dispatched_all = false;
+                    break;
+                }
                 let be = plan
                     .backend_event(index, &map)
                     .expect("non-sleep events always convert");
@@ -224,7 +268,7 @@ pub fn execute_plan(
     // not_started. Cancellation before any injection is honestly not_started.
     out.input_outcome = if dispatched_all {
         InputOutcome::Dispatched
-    } else if out.events_completed.is_empty() && !first_failure && out.cancelled {
+    } else if out.events_completed.is_empty() && !first_failure {
         InputOutcome::NotStarted
     } else {
         InputOutcome::Partial
@@ -328,6 +372,35 @@ mod tests {
     }
 
     #[test]
+    fn topology_guard_cannot_dispatch_after_input_deadline() {
+        let mut backend = FakeBackend::new(1600, 900);
+        let cancel = Arc::new(AtomicBool::new(false));
+        let plan = compile_plan(&Action::Move { position: [3, 4] }, 1);
+        let config = ExecutionConfig {
+            input_budget: Duration::from_millis(20),
+            settle_delay: Duration::ZERO,
+            ..ExecutionConfig::production()
+        };
+        let out = execute_plan_guarded(
+            &plan,
+            &mut backend,
+            |p| (p[0], p[1]),
+            &cancel,
+            &config,
+            |_, _| {
+                // Pure mock delay; no OS display query, input, or capture.
+                std::thread::sleep(config.input_budget + Duration::from_millis(1));
+                Ok(())
+            },
+        );
+        assert_eq!(out.input_outcome, InputOutcome::NotStarted);
+        assert!(out.events_completed.is_empty());
+        assert_eq!(out.cleanup_outcome, CleanupOutcome::NotNeeded);
+        assert_eq!(backend.release_all_calls(), 0);
+        assert_eq!(out.error.unwrap().code, codes::DEADLINE_EXCEEDED);
+    }
+
+    #[test]
     fn fully_dispatched_reports_no_cleanup_needed() {
         let mut b = FakeBackend::new(1600, 900);
         let c = Arc::new(AtomicBool::new(false));
@@ -352,12 +425,14 @@ mod tests {
     #[test]
     fn mid_text_cancellation_reports_partial_and_releases() {
         // Deterministic: the cancel flag is asserted by the test seam after
-        // exactly 3 chunks are injected, with no thread sleeps or wall-clock
+        // exactly 3 scalars are injected, with no thread sleeps or wall-clock
         // races. The flag is honored at the next event boundary, exactly like
-        // a transport-set cancel.
+        // a transport-set cancel. With per-scalar text planning the plan now
+        // carries one event per character (plus 1ms intervals), so
+        // cancellation lands between characters.
         let mut b = FakeBackend::new(1600, 900);
         let c = Arc::new(AtomicBool::new(false));
-        let text = "x".repeat(64 * 10); // 10 text events
+        let text = "x".repeat(640); // 640 scalar events + 639 intervals
         let out = run(
             Action::TextInput { text },
             &mut b,
@@ -371,7 +446,7 @@ mod tests {
         assert!(out.cancelled);
         assert_eq!(out.input_outcome, InputOutcome::Partial);
         assert_eq!(out.events_completed.len(), 3);
-        assert_eq!(out.events_total, 10);
+        assert_eq!(out.events_total, 640);
         assert!(b.events().len() >= 3);
         assert_eq!(out.cleanup_outcome, CleanupOutcome::Released);
         assert!(!out.settled);

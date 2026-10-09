@@ -1,0 +1,5 @@
+最小Mac fixture专用环境准备功能（不改Host/输入库，不GUI）：只写 acceptance-fixture/macos/main.swift、fixtureREADME/你的报告，输出新 .agents/runs/layered-fixture-build-20260930-d/macos。当前窗口位置已正确主屏bounds[510,144,900,792]，但opaque backdrop盖在前面。只读probe .agents/runs/layered-backdrop-20260930/probe-fixed.json 显示bg index1 vsfixture18，App activate / activateAllWindows未raise，helper尝试自己activate+3s重试仍无效。真实GLM仅看到菜单误报fixture可见，coord不接受。需要明确让fixture自己orderFront，而不是猜系统activation是否raise。避免always-floating，不改用户窗口、屏幕/权限，不用AX/AppleScript或按键。
+
+为Mac fixture增加 --coordinator-raise 开关，仅GUI路径注册POSIX SIGUSR1 DispatchSource(queue:.main) 并保留引用（SIGUSR1 ignored+main dispatch）；收到时只对本应用单个owned window 执行 makeKeyAndOrderFront / orderFrontRegardless，再NSApp.activate，log coordinator_raise事件（metadata无文本答案）。永远不触碰其他app/window，不改text/目标/nonce，不注入键鼠。source安装完成后stdout打印 `COORDINATOR_RAISE_READY=1 PID=<pid>`，coord只有核对该新产物flag/日志与PID/exe身份后才发信号，不会给旧binary发SIGUSR1。开关未给时不注册/不声称ready；--self-test/--export仍提前exit无GUI。未知参数fail-closed仍保留。
+
+不自行启动GUI/发SIGUSR1。编译新唯一-d产物并self-test46/parity；报告hash和参数，窗口可见性由coord实际核对，不宣称已验证。补文档此为coord环境准备不属于agent动作，不允许GUI agent通过shell调用（agent8tools和file隔离不变）。直接小补丁，不重新长篇设计。

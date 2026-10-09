@@ -1,4 +1,7 @@
 /target
+# Nested workspace crate builds its own standalone target dir (the crate
+# intentionally declares an empty [workspace] to stay self-contained).
+/crates/native-input/target
 **/*.rs.bk
 .DS_Store
 

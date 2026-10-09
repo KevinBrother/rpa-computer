@@ -142,7 +142,9 @@ pub fn error_response_with_data(id: Value, code: i64, message: &str, data: Value
 }
 
 pub fn result_response(id: Value, result: Value) -> String {
-    json!({ "jsonrpc": "2.0", "id": id, "result": result }).to_string()
+    let value = json!({ "jsonrpc": "2.0", "id": id, "result": result });
+    super::bounded_output::serialized(&value, MAX_OUT_LINE_BYTES - 1)
+        .unwrap_or_else(|| error_response(value["id"].clone(), INTERNAL_ERROR, "output_budget"))
 }
 
 /// Result payload for a successful `initialize`.

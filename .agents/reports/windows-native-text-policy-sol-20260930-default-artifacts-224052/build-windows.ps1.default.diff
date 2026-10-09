@@ -1,0 +1,19 @@
+--- acceptance-fixture/build-windows.ps1.opt-in
++++ acceptance-fixture/build-windows.ps1.default
+@@ -13,6 +13,7 @@
+ $gestureSources = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'windows') -Filter 'Gesture*.cs' | ForEach-Object { $_.FullName })
+ $basicSources = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'windows') -Filter 'Basic*.cs' | ForEach-Object { $_.FullName })
+ $focusSources = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'windows') -Filter 'Focus*.cs' | ForEach-Object { $_.FullName })
++$nativeTextSources = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'windows') -Filter 'NativeText*.cs' | ForEach-Object { $_.FullName })
+ $focusTestSource = Join-Path $PSScriptRoot 'windows\FocusSelfTest.cs'
+ $exe    = Join-Path $OutDir 'ComputerUseAcceptance.exe'
+ $csc    = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+@@ -26,7 +27,7 @@
+ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+ 
+ & $csc /nologo /langversion:5 /codepage:65001 /target:winexe /platform:anycpu /utf8output /optimize+ `
+-    /out:"$exe" "$src" "$srcCases" $gestureSources $basicSources $focusSources `
++    /out:"$exe" "$src" "$srcCases" $gestureSources $basicSources $focusSources $nativeTextSources `
+     /reference:System.dll,System.Drawing.dll,System.Windows.Forms.dll
+ if ($LASTEXITCODE -ne 0) { throw "csc failed with exit code $LASTEXITCODE" }
+ 

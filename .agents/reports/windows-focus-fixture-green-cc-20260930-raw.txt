@@ -1,0 +1,254 @@
+=== remote-hash-verify.txt ===
+15c06ae298631f6611d486a1189b1cbd32d09892105f7666d5e1cdadacd9b399  acceptance-fixture/README.md  OK
+65cd49e0dfc78a53115e77c57234a28ae848098ae6fb72dfb3aad49c42059e11  acceptance-fixture/build-windows.ps1  OK
+ddeac570dcb252acf6c3870eb6ff176cc9c38d71586322acba90ab871c17a41a  acceptance-fixture/macos/Cases.swift  OK
+c5d3a98e9ae09b7c87c4d1f70a4bf4e3688b56f1847748d3406434a081b8e0d0  acceptance-fixture/macos/GestureCases.swift  OK
+08e7bafd887227a503b87856f16f122b830c447aa0d9986da04bc9ff4cd64c64  acceptance-fixture/start-windows.ps1  OK
+128b9e6bfa1aa696b33c5de0cc600d80fd7cfc9d5ad07331a7856a12fc3ba98f  acceptance-fixture/tasks/windows-focus.md  OK
+0e1d7422362ca2cfd0049c46d9d8b186931bbf86c1486de850fafd21be038549  acceptance-fixture/tools/check-cases-parity.py  OK
+31dbdd36ed71caa50d79a85e1acc7d0b2c6e33f2da177a1116566d341b3fdf59  acceptance-fixture/windows/BasicArguments.cs  OK
+9a40ca4bed926cf4da2cda2e3cdc4429cba6f1d04ec392e261e08c3f965fa6d1  acceptance-fixture/windows/BasicCases.cs  OK
+fe066d214c9d620df1ae2ac37dfeed5e68344b95cf9d7dc2e08d8c1b75cd431a  acceptance-fixture/windows/BasicForm.cs  OK
+d9783bef6b210d0c7bae25090b416081a855afbc60ef24f5c3023e8542b8cc49  acceptance-fixture/windows/BasicJudge.cs  OK
+5c1def6ef4ba51c76522474549d41471f0f0b32206cc1f47f78680475c2b48f8  acceptance-fixture/windows/BasicNative.cs  OK
+cd94a48f450952bfe79aa2a73453e8138fa3af32f080ae9a088f9df224c32a8b  acceptance-fixture/windows/BasicSelfTest.cs  OK
+6bf1a8e1b33016f5dddde78a7350550b82914b8753dabd475bc217d40af44909  acceptance-fixture/windows/Cases.cs  OK
+7b0e18d6c7c4854f6b2a7407780c8c0f15ee23a596e7d7584b964b83457f05f4  acceptance-fixture/windows/FocusCases.cs  OK
+d18d887cc2e5389037f8b16985866f13d313c7c3992679f4734629478efa8447  acceptance-fixture/windows/FocusForm.cs  OK
+6696b7e1a9907cd577035ff1f6b77c7e29d48a8972b52728a34c74f5ebcfa9dc  acceptance-fixture/windows/FocusJudge.cs  OK
+498730fc32e7ff4f693a59d3ad0106ddf84da1a8ca2fe1c5542184fcfa8d98ff  acceptance-fixture/windows/FocusNative.cs  OK
+b48b2aaf061ab8e0bfd45feecd0a65ebf49145464a50f0821c40425570dd6068  acceptance-fixture/windows/FocusRegression.cs  OK
+39ad3fc966a721b214ce3ed8d33268481bc41060f9f08519e4a23a94799de653  acceptance-fixture/windows/FocusSelfTest.cs  OK
+a98aceb2a606ec765932e4fb3194cbcc20f4317304b708a91595f05590ebae17  acceptance-fixture/windows/FocusWindows.cs  OK
+456108a7ab12640ca1abbddc7a27fa2f8923af185e926d1ccb5208050bddbebe  acceptance-fixture/windows/GestureCases.cs  OK
+6772609f0869615ce9ca400f0089a7a22727f5a4b2bc7fc11f39f1b852434082  acceptance-fixture/windows/GestureForm.cs  OK
+63920ae7d9667ac8696220c7e61211be89a2d16e24911b13e63adead6ac299b4  acceptance-fixture/windows/GestureJudge.cs  OK
+686212d5d0d6622504de5e3d6eaadd40a7990209ce1d4ae374abb6a1c8d256d2  acceptance-fixture/windows/GestureNative.cs  OK
+612d2e8fd5bb8c506429402ba2e89d20273756fbb5a5e1635ce9f777c04e5d0a  acceptance-fixture/windows/GestureSelfTest.cs  OK
+cb943b417553f15f3a933df48f2d198a279c303c9ab8b8c1f5569a8b900ba7d9  acceptance-fixture/windows/MainForm.cs  OK
+630c2f611de4b22e018748ebcea185dc87ef2369b0adf0f085cf0a5ad6d8bd4c  scripts/analyze-basic-input-gui.py  OK
+5cab0102f0b9c5841a42f0b20fb8603f74bc01eacc8d5b0cb40d94422f342474  scripts/analyze-focus-gui.py  OK
+cb91d5a8feffc26c5e45b9ae725a0444cc59f910ee0560633a8b100063fe25d9  tests/basic_input_gui_analyzer.py  OK
+275a0867b38c3939512f40105e9e45d246c057b954c9c30a9cbd9ddc19096132  tests/focus_gui_analyzer.py  OK
+RUNNER ad2a607ca0af59983b306ba5f6c32611005669a6b7d385834ccceb027a9572c4  scripts/windows-test-runner.ps1
+RUNNER aced18e616afe881845b2ac233e32a190b7186b69492aaa7be416ac41e972214  scripts/windows-test-runner/Runner.cs
+=== remote-hash-recheck.txt ===
+15c06ae298631f6611d486a1189b1cbd32d09892105f7666d5e1cdadacd9b399  acceptance-fixture/README.md  OK
+65cd49e0dfc78a53115e77c57234a28ae848098ae6fb72dfb3aad49c42059e11  acceptance-fixture/build-windows.ps1  OK
+ddeac570dcb252acf6c3870eb6ff176cc9c38d71586322acba90ab871c17a41a  acceptance-fixture/macos/Cases.swift  OK
+c5d3a98e9ae09b7c87c4d1f70a4bf4e3688b56f1847748d3406434a081b8e0d0  acceptance-fixture/macos/GestureCases.swift  OK
+08e7bafd887227a503b87856f16f122b830c447aa0d9986da04bc9ff4cd64c64  acceptance-fixture/start-windows.ps1  OK
+128b9e6bfa1aa696b33c5de0cc600d80fd7cfc9d5ad07331a7856a12fc3ba98f  acceptance-fixture/tasks/windows-focus.md  OK
+0e1d7422362ca2cfd0049c46d9d8b186931bbf86c1486de850fafd21be038549  acceptance-fixture/tools/check-cases-parity.py  OK
+31dbdd36ed71caa50d79a85e1acc7d0b2c6e33f2da177a1116566d341b3fdf59  acceptance-fixture/windows/BasicArguments.cs  OK
+9a40ca4bed926cf4da2cda2e3cdc4429cba6f1d04ec392e261e08c3f965fa6d1  acceptance-fixture/windows/BasicCases.cs  OK
+fe066d214c9d620df1ae2ac37dfeed5e68344b95cf9d7dc2e08d8c1b75cd431a  acceptance-fixture/windows/BasicForm.cs  OK
+d9783bef6b210d0c7bae25090b416081a855afbc60ef24f5c3023e8542b8cc49  acceptance-fixture/windows/BasicJudge.cs  OK
+5c1def6ef4ba51c76522474549d41471f0f0b32206cc1f47f78680475c2b48f8  acceptance-fixture/windows/BasicNative.cs  OK
+cd94a48f450952bfe79aa2a73453e8138fa3af32f080ae9a088f9df224c32a8b  acceptance-fixture/windows/BasicSelfTest.cs  OK
+6bf1a8e1b33016f5dddde78a7350550b82914b8753dabd475bc217d40af44909  acceptance-fixture/windows/Cases.cs  OK
+7b0e18d6c7c4854f6b2a7407780c8c0f15ee23a596e7d7584b964b83457f05f4  acceptance-fixture/windows/FocusCases.cs  OK
+d18d887cc2e5389037f8b16985866f13d313c7c3992679f4734629478efa8447  acceptance-fixture/windows/FocusForm.cs  OK
+6696b7e1a9907cd577035ff1f6b77c7e29d48a8972b52728a34c74f5ebcfa9dc  acceptance-fixture/windows/FocusJudge.cs  OK
+498730fc32e7ff4f693a59d3ad0106ddf84da1a8ca2fe1c5542184fcfa8d98ff  acceptance-fixture/windows/FocusNative.cs  OK
+b48b2aaf061ab8e0bfd45feecd0a65ebf49145464a50f0821c40425570dd6068  acceptance-fixture/windows/FocusRegression.cs  OK
+39ad3fc966a721b214ce3ed8d33268481bc41060f9f08519e4a23a94799de653  acceptance-fixture/windows/FocusSelfTest.cs  OK
+a98aceb2a606ec765932e4fb3194cbcc20f4317304b708a91595f05590ebae17  acceptance-fixture/windows/FocusWindows.cs  OK
+456108a7ab12640ca1abbddc7a27fa2f8923af185e926d1ccb5208050bddbebe  acceptance-fixture/windows/GestureCases.cs  OK
+6772609f0869615ce9ca400f0089a7a22727f5a4b2bc7fc11f39f1b852434082  acceptance-fixture/windows/GestureForm.cs  OK
+63920ae7d9667ac8696220c7e61211be89a2d16e24911b13e63adead6ac299b4  acceptance-fixture/windows/GestureJudge.cs  OK
+686212d5d0d6622504de5e3d6eaadd40a7990209ce1d4ae374abb6a1c8d256d2  acceptance-fixture/windows/GestureNative.cs  OK
+612d2e8fd5bb8c506429402ba2e89d20273756fbb5a5e1635ce9f777c04e5d0a  acceptance-fixture/windows/GestureSelfTest.cs  OK
+cb943b417553f15f3a933df48f2d198a279c303c9ab8b8c1f5569a8b900ba7d9  acceptance-fixture/windows/MainForm.cs  OK
+630c2f611de4b22e018748ebcea185dc87ef2369b0adf0f085cf0a5ad6d8bd4c  scripts/analyze-basic-input-gui.py  OK
+5cab0102f0b9c5841a42f0b20fb8603f74bc01eacc8d5b0cb40d94422f342474  scripts/analyze-focus-gui.py  OK
+cb91d5a8feffc26c5e45b9ae725a0444cc59f910ee0560633a8b100063fe25d9  tests/basic_input_gui_analyzer.py  OK
+275a0867b38c3939512f40105e9e45d246c057b954c9c30a9cbd9ddc19096132  tests/focus_gui_analyzer.py  OK
+RUNNER ad2a607ca0af59983b306ba5f6c32611005669a6b7d385834ccceb027a9572c4  scripts/windows-test-runner.ps1
+RUNNER aced18e616afe881845b2ac233e32a190b7186b69492aaa7be416ac41e972214  scripts/windows-test-runner/Runner.cs
+=== collect.txt ===
+build-exit: 0
+exe-sha: 0cb2a66bae9fd90666788a3341a580aad024d5e16e23825f37ae57fe81d13035
+selftest: native=0 timed_out=False harness=0 root_pid=29412 stdout_bytes=10803 stderr_bytes=0 outcome=success
+export63: native=0 timed_out=False harness=0 root_pid=17968 stdout_bytes=254 stderr_bytes=0 outcome=success
+export20: native=0 timed_out=False harness=0 root_pid=2116 stdout_bytes=184 stderr_bytes=0 outcome=success
+export-focus10: native=0 timed_out=False harness=0 root_pid=17344 stdout_bytes=187 stderr_bytes=0 outcome=success
+focus-analyzer: native=0 timed_out=False harness=0 root_pid=800 stdout_bytes=0 stderr_bytes=139 outcome=success
+basic-analyzer-regression: native=0 timed_out=False harness=0 root_pid=25068 stdout_bytes=0 stderr_bytes=134 outcome=success
+legacy63-parity: native=0 timed_out=False harness=0 root_pid=22336 stdout_bytes=234 stderr_bytes=0 outcome=success
+selftest PASS count: 178
+selftest FAIL count: 0
+selftest last line: SELF-TEST PASSED (178 checks)
+selftest FAIL lines:
+legacy63.json: count=1 unique_ids=0 first= last=
+windows-basic20.json: count=1 unique_ids=0 first= last=
+windows-focus10.json: count=10 unique_ids=10 first=focus-01 last=focus-10
+  gui_verified=False
+=== collect2.txt ===
+=== focus-analyzer stderr ===
+...................................
+----------------------------------------------------------------------
+Ran 35 tests in 0.086s
+
+OK
+
+=== basic-analyzer-regression stderr ===
+..............................
+----------------------------------------------------------------------
+Ran 30 tests in 0.142s
+
+OK
+
+=== legacy63-parity stdout ===
+PARITY OK: swift == cs at UTF-16 level; spec satisfied; 63 cases across 8 suites
+runtime manifest match: OK (C:\Users\Administrator\AppData\Local\Temp\computer-focus-green-cc-0c0f9bcb66974625b76e19d4274b5e54\greenout\legacy63.json)
+
+=== export63 stdout ===
+exported case manifest: C:\Users\Administrator\AppData\Local\Temp\computer-focus-green-cc-0c0f9bcb66974625b76e19d4274b5e54\greenout\legacy63.json
+WARNING: coordinator-only file (contains answers). Must NOT be placed in the GUI agent publish directory.
+
+=== export20 stdout ===
+exported Windows-only B2 manifest (coordinator only): C:\Users\Administrator\AppData\Local\Temp\computer-focus-green-cc-0c0f9bcb66974625b76e19d4274b5e54\greenout\windows-basic20.json
+
+=== export-focus10 stdout ===
+exported Windows-only focus manifest (coordinator only): C:\Users\Administrator\AppData\Local\Temp\computer-focus-green-cc-0c0f9bcb66974625b76e19d4274b5e54\greenout\windows-focus10.json
+
+StageA PASS lines: 143  new PASS lines: 178
+StageA PASS lines missing from new run: 0
+StageA FAIL line (now expected gone): FAIL: focus-args-accepts-focus-suite � required --suite focus; parser rejected with ArgumentException: unknown suite: focus
+focus PASS lines in new run: 35
+  PASS: focus-args-accepts-focus-suite � required --suite focus; parser returned suite: focus
+  PASS: focus-catalog-ten � pure synthetic; not GUI proof
+  PASS: focus-unique-ids � pure synthetic; not GUI proof
+  PASS: focus-focus-export-argument � pure synthetic; not GUI proof
+  PASS: focus-focus-export-conflict � pure synthetic; not GUI proof
+  PASS: focus-focus-export-b2-conflict � pure synthetic; not GUI proof
+  PASS: focus-focus-export-missing � pure synthetic; not GUI proof
+  PASS: focus-focus-export-duplicate � pure synthetic; not GUI proof
+  PASS: focus-unknown-suite-still-rejected � pure synthetic; not GUI proof
+  PASS: focus-a-to-b-native � pure synthetic; not GUI proof
+  PASS: focus-activation-required � pure synthetic; not GUI proof
+  PASS: focus-wrong-window � pure synthetic; not GUI proof
+  PASS: focus-raw-button-mismatch � pure synthetic; not GUI proof
+  PASS: focus-missing-event � pure synthetic; not GUI proof
+  PASS: focus-held-input � pure synthetic; not GUI proof
+  PASS: focus-case9-empty-not-pass � pure synthetic; not GUI proof
+  PASS: focus-case10-zero-only-needs-trace � pure synthetic; not GUI proof
+  PASS: focus-case10-text-rejected � pure synthetic; not GUI proof
+  PASS: focus-wrong-key-focus � pure synthetic; not GUI proof
+  PASS: focus-modal-missing-native � pure synthetic; not GUI proof
+  PASS: focus-restore-missing-native � pure synthetic; not GUI proof
+  PASS: focus-semantic-case-1 � pure synthetic; not GUI proof
+  PASS: focus-semantic-case-2 � pure synthetic; not GUI proof
+  PASS: focus-semantic-case-3 � pure synthetic; not GUI proof
+  PASS: focus-semantic-case-4 � pure synthetic; not GUI proof
+  PASS: focus-semantic-case-5 � pure synthetic; not GUI proof
+  PASS: focus-semantic-case-6 � pure synthetic; not GUI proof
+  PASS: focus-semantic-case-7 � pure synthetic; not GUI proof
+  PASS: focus-semantic-case-8 � pure synthetic; not GUI proof
+  PASS: focus-semantic-case-9 � pure synthetic; not GUI proof
+  PASS: focus-semantic-case-10 � pure synthetic; not GUI proof
+  PASS: focus-raw-char-payload-mismatch � pure synthetic; not GUI proof
+  PASS: focus-mouseup-wrong-focus � pure synthetic; not GUI proof
+  PASS: focus-nonmodal-cannot-pass-modal � pure synthetic; not GUI proof
+  PASS: focus-menu-exit-required � pure synthetic; not GUI proof
+=== json-verify.txt ===
+legacy63 suite baseline: 10
+legacy63 suite drag: 10
+legacy63 suite emoji: 6
+legacy63 suite known-input: 10
+legacy63 suite legacy: 1
+legacy63 suite multiclick: 10
+legacy63 suite punctuation: 6
+legacy63 suite scroll: 10
+legacy63 TOTAL=63 unique_ids=63 first=baseline-01 last=scroll-10
+legacy63 top keys: ['format', 'suites', 'version', 'warning']
+basic20 suite keyboard: 10 specs_unique=10
+  specs: ['plain_key', 'enter_tab', 'select_all', 'shift_select', 'alt_command', 'multi_modifier', 'short_hold', 'long_hold', 'modifier_release', 'invalid_key']
+basic20 suite pointer: 10 specs_unique=10
+  specs: ['center_move', 'edge_move', 'scaled_move', 'left_click', 'right_menu', 'middle_click', 'inactive_click', 'small_target', 'padding_reject', 'bounds_reject']
+basic20 TOTAL=20 unique_ids=20 first=keyboard-01 last=pointer-10
+basic20 legacy_manifest_unchanged=True
+focus10 layout: top-level cases
+focus10 TOTAL=10 unique_ids=10 ordered=True
+  focus-01 spec=a_to_b trials_per_run=1 status=implemented_pending_CC
+  focus-02 spec=b_to_a trials_per_run=1 status=implemented_pending_CC
+  focus-03 spec=activate_text trials_per_run=1 status=implemented_pending_CC
+  focus-04 spec=editor_shortcut trials_per_run=1 status=implemented_pending_CC
+  focus-05 spec=own_modal trials_per_run=1 status=implemented_pending_CC
+  focus-06 spec=modal_close trials_per_run=1 status=implemented_pending_CC
+  focus-07 spec=menu_exit trials_per_run=1 status=implemented_pending_CC
+  focus-08 spec=minimize_restore trials_per_run=1 status=implemented_pending_CC
+  focus-09 spec=protected_scope trials_per_run=1 status=implemented_pending_CC
+  focus-10 spec=unconfirmed_stop trials_per_run=1 status=implemented_pending_CC
+focus10 top keys: ['cases', 'gui_verified', 'platform', 'schema', 'suite', 'ten_valid_trials_per_action_gate', 'total']
+focus10 gui_verified=False
+focus10 ten_valid_trials_per_action_gate=False
+focus10 occurrences of 'gui_verified': 1; sample: ['.gui_verified=False']
+focus10 occurrences of 'ten_valid_trials_per_action_gate': 1; sample: ['.ten_valid_trials_per_action_gate=False']
+focus10 occurrences of 'unknown': 0; sample: []
+focus10 occurrences of 'blocked': 0; sample: []
+focus10 occurrences of 'needs_supervisor': 0; sample: []
+=== residual-check.txt ===
+NO residual process with exact owned executable paths (stageb exe or staged python invocation path): c:\users\administrator\appdata\local\temp\computer-focus-green-cc-0c0f9bcb66974625b76e19d4274b5e54\greenout\buildout\computeruseacceptance.exe ; c:\users\administrator\appdata\local\programs\python\python312\python.exe
+=== build-exit / exe-sha ===
+00cb2a66bae9fd90666788a3341a580aad024d5e16e23825f37ae57fe81d13035=== per-step native exits ===
+basic-analyzer-regression-native-exit.txt: 0
+export-focus10-native-exit.txt: 0
+export20-native-exit.txt: 0
+export63-native-exit.txt: 0
+focus-analyzer-native-exit.txt: 0
+legacy63-parity-native-exit.txt: 0
+selftest-native-exit.txt: 0
+basic-analyzer-regression-harness-exit.txt: 0
+export-focus10-harness-exit.txt: 0
+export20-harness-exit.txt: 0
+export63-harness-exit.txt: 0
+focus-analyzer-harness-exit.txt: 0
+legacy63-parity-harness-exit.txt: 0
+selftest-harness-exit.txt: 0
+=== master.ps1 ===
+$ErrorActionPreference = 'Stop'
+$root = 'C:/Users/Administrator/AppData/Local/Temp/computer-focus-green-cc-0c0f9bcb66974625b76e19d4274b5e54'
+$out = Join-Path $root 'greenout'
+$python = 'C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe'
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+function Write-Exit([string]$Path, $Code) {
+    if ($null -eq $Code) { [IO.File]::WriteAllText($Path, 'NULL') }
+    else { [IO.File]::WriteAllText($Path, $Code.ToString()) }
+}
+
+# Step 0: build via frozen build-windows.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'acceptance-fixture\build-windows.ps1') -OutDir (Join-Path $out 'buildout') 1> (Join-Path $out 'build.log') 2> (Join-Path $out 'build.err')
+$buildCode = $LASTEXITCODE
+Write-Exit (Join-Path $out 'build-exit.txt') $buildCode
+if ($null -eq $buildCode -or $buildCode -ne 0) { throw "csc exit=$buildCode" }
+$exe = Join-Path $out 'buildout\ComputerUseAcceptance.exe'
+$exeSha = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLower()
+[IO.File]::WriteAllText((Join-Path $out 'exe-sha256.txt'), $exeSha)
+
+function Invoke-FocusNative([string]$Label, [string]$Program, [string[]]$Argv) {
+    $evidence = Join-Path $out ($Label + '-evidence')
+    if (Test-Path $evidence) { throw "$Label evidence leaf already exists" }
+    $config = Join-Path $out ($Label + '-config.json')
+    $cfg = @{ executablePath = $Program; arguments = @($Argv); workingDirectory = $root;
+              evidenceDirectory = $evidence; timeoutSeconds = 120 }
+    [IO.File]::WriteAllText($config, ($cfg | ConvertTo-Json -Depth 8), (New-Object Text.UTF8Encoding($false)))
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'scripts\windows-test-runner.ps1') -ConfigPath $config 1> (Join-Path $out ($Label + '-runner-stdout.log')) 2> (Join-Path $out ($Label + '-runner-stderr.log'))
+    $exit = $LASTEXITCODE
+    Write-Exit (Join-Path $out ($Label + '-harness-exit.txt')) $exit
+    if ($null -eq $exit -or $exit -ne 0) { throw "$Label runner exit=$exit; preserve first failure and STOP" }
+    $s = Get-Content -Raw (Join-Path $evidence 'summary.json') | ConvertFrom-Json
+    if ($null -eq $s.native_exit_code -or $s.native_exit_code -ne 0 -or $s.timed_out) { throw "$Label native failure/missing/timeout; STOP" }
+    Write-Exit (Join-Path $out ($Label + '-native-exit.txt')) $s.native_exit_code
+}
+
+Invoke-FocusNative 'selftest' $exe @('--self-test')
+Invoke-FocusNative 'export63' $exe @('--export-cases', (Join-Path $out 'legacy63.json'))
+Invoke-FocusNative 'export20' $exe @('--export-platform-cases', (Join-Path $out 'windows-basic20.json'))
+Invoke-FocusNative 'export-focus10' $exe @('--export-focus-cases', (Join-Path $out 'windows-focus10.json'))
+Invoke-FocusNative 'focus-analyzer' $python @((Join-Path $root 'tests\focus_gui_analyzer.py'))
+Invoke-FocusNative 'basic-analyzer-regression' $python @((Join-Path $root 'tests\basic_input_gui_analyzer.py'))
+Invoke-FocusNative 'legacy63-parity' $python @((Join-Path $root 'acceptance-fixture\tools\check-cases-parity.py'), (Join-Path $out 'legacy63.json'))
+'ALL STEPS DONE'

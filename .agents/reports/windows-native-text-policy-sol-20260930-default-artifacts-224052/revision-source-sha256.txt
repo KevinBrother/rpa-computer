@@ -1,0 +1,3 @@
+abe033c64c8f04df1a77d8204500697a9b493fe341b4e6849da7c0469b777095  acceptance-fixture/windows/MainForm.cs
+9bcc9c13293648ff096dc3ae8509987bcbf070b939c0b8671a94140a89ec3cfc  acceptance-fixture/windows/NativeTextPolicy.cs
+226ea4046a05c5d182f070b001ebdcef323ad95c7909bf38cfb35765249696c7  acceptance-fixture/build-windows.ps1

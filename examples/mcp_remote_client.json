@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "computer": {
+      "command": "/ABSOLUTE/PATH/TO/release/bin/computer-client",
+      "args": [
+        "--connect", "WINDOWS_HOST_IP:8399",
+        "--ca-cert", "/ABSOLUTE/PATH/TO/creds/client/ca.pem",
+        "--server-name", "rpa-host.lan",
+        "--token-file", "/ABSOLUTE/PATH/TO/creds/client/client.token"
+      ],
+      "env": {}
+    }
+  }
+}

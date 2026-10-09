@@ -11,8 +11,8 @@ use serde_json::{json, Value};
 use crate::backend::{Backend, Geometry};
 use crate::runtime::actions::{self, Action};
 use crate::runtime::error::{codes, ToolError};
+use crate::runtime::execute;
 use crate::runtime::image::{self, CoordMap};
-use crate::runtime::{execute, plan};
 
 /// Maximum age of the observation a step may be based on.
 pub const OBSERVATION_FRESHNESS: Duration = Duration::from_secs(120);
@@ -180,11 +180,12 @@ pub struct ObservationMeta {
     pub width_px: u32,
     pub height_px: u32,
     pub settled: bool,
+    pub display_metadata: Value,
 }
 
 impl ObservationMeta {
     pub fn to_json(&self) -> Value {
-        json!({
+        let mut data = json!({
             "observation_id": self.observation_id,
             "session_id": self.session_id,
             "surface_id": self.surface_id,
@@ -199,7 +200,13 @@ impl ObservationMeta {
                 "width_px": self.width_px,
                 "height_px": self.height_px,
             },
-        })
+        });
+        if let Some(fields) = self.display_metadata.as_object() {
+            for (k, v) in fields {
+                data[k] = v.clone();
+            }
+        }
+        data
     }
 }
 
@@ -212,6 +219,7 @@ pub struct Observation {
     pub captured_at: Instant,
     pub png: Vec<u8>,
     pub map: CoordMap,
+    pub regions: Option<Arc<rpa_display_topology::ObservationMapping>>,
 }
 
 impl Observation {
@@ -265,6 +273,7 @@ struct CachedObservation {
     meta: ObservationMeta,
     captured_at: Instant,
     map: CoordMap,
+    regions: Option<Arc<rpa_display_topology::ObservationMapping>>,
 }
 
 impl ImageCache {
@@ -308,6 +317,7 @@ impl ImageCache {
                 meta: obs.meta.clone(),
                 captured_at: obs.captured_at,
                 map: obs.map,
+                regions: obs.regions.clone(),
             },
         );
         Ok(())
@@ -333,6 +343,7 @@ impl ImageCache {
             captured_at: e.captured_at,
             png: e.png.clone(),
             map: e.map,
+            regions: e.regions.clone(),
         })
     }
 
@@ -374,6 +385,8 @@ pub struct Session {
     pub id: String,
     pub state: SessionState,
     max_image: (u32, u32),
+    pub(crate) display_generation: Option<rpa_display_topology::Generation>,
+    pub(crate) display_selection: rpa_display_topology::Selection,
     geometry: Geometry,
     input_sequence: u64,
     observation_counter: u64,
@@ -401,6 +414,8 @@ impl Session {
             id,
             state: SessionState::Ready,
             max_image,
+            display_generation: None,
+            display_selection: rpa_display_topology::Selection::Primary,
             geometry,
             input_sequence: 0,
             observation_counter: 0,
@@ -480,70 +495,8 @@ impl Session {
 /// Capture a fresh observation. On geometry change the session faults and the
 /// error is `geometry_changed`; the caller must not pretend the old geometry
 /// still applies.
-pub fn capture_observation(
-    session: &mut Session,
-    backend: &mut dyn Backend,
-    wait_ms: u64,
-    cancel: &Arc<AtomicBool>,
-) -> Result<Observation, ToolError> {
-    let wait = Duration::from_millis(wait_ms.min(OBSERVE_MAX_WAIT_MS));
-    sleep_cancellable(wait, cancel)?;
-    if cancel.load(Ordering::SeqCst) {
-        return Err(ToolError::new(codes::CANCELLED, "observe cancelled"));
-    }
-
-    // Re-check geometry before trusting the capture: the WHOLE geometry
-    // (identity, origin, size, version) must match what the session is bound
-    // to, same invariant as validate_step and resume.
-    let geometry = backend
-        .geometry()
-        .map_err(|e| fault(session, ToolError::from(e)))?;
-    if geometry != session.geometry {
-        let err = ToolError::new(
-            codes::GEOMETRY_CHANGED,
-            format!(
-                "display geometry changed (was {}, now {})",
-                session.geometry.version, geometry.version
-            ),
-        );
-        return Err(fault(session, err));
-    }
-    session.geometry = geometry.clone();
-
-    let capture = backend.capture().map_err(ToolError::from)?;
-    if capture.geometry != session.geometry {
-        let err = ToolError::new(
-            codes::GEOMETRY_CHANGED,
-            "capture geometry does not match session geometry",
-        );
-        return Err(fault(session, err));
-    }
-
-    let (png, actual) = image::downscale(&capture.png, session.max_image)?;
-    let map = CoordMap::new(
-        actual,
-        session.geometry.input_origin,
-        session.geometry.input_size,
-    )?;
-    let obs = Observation {
-        meta: ObservationMeta {
-            observation_id: session.next_observation_id(),
-            session_id: session.id.clone(),
-            surface_id: session.geometry.surface_id.clone(),
-            geometry_version: session.geometry.version.clone(),
-            input_sequence: session.input_sequence,
-            width_px: actual.width,
-            height_px: actual.height,
-            // A standalone observe reports what was captured; no settle claim.
-            settled: false,
-        },
-        captured_at: Instant::now(),
-        png,
-        map,
-    };
-    session.store_observation(obs.clone())?;
-    Ok(obs)
-}
+mod observation;
+pub use observation::capture_observation;
 
 fn fault(session: &mut Session, err: ToolError) -> ToolError {
     session.state = SessionState::Faulted;
@@ -674,13 +627,13 @@ pub fn execute_step(
     session.input_sequence += 1;
 
     // --- dispatch (generic executor: chunked text, deadlines, releases) ----
-    let plan = plan::compile_plan(&action, drag_move_count(&action));
-    let outcome = execute::execute_plan(
-        &plan,
+    let outcome = crate::runtime::display_input::execute(
+        &action,
+        &basis,
         ctx.backend,
-        |p| basis.map.to_native(p),
         &ctx.cancel,
         &ctx.config,
+        drag_move_count(&action),
     );
     record.input_outcome = outcome.input_outcome;
     record.events_completed = outcome.events_completed;
@@ -688,7 +641,12 @@ pub fn execute_step(
     record.cleanup_outcome = outcome.cleanup_outcome;
     record.cancelled = outcome.cancelled;
     record.error = outcome.error;
-    if record.cleanup_outcome == CleanupOutcome::Failed {
+    if record.cleanup_outcome == CleanupOutcome::Failed
+        || record
+            .error
+            .as_ref()
+            .is_some_and(|e| e.code == codes::GEOMETRY_CHANGED)
+    {
         // Cleanup failure faults the session: input state cannot be trusted.
         session.state = SessionState::Faulted;
     }
@@ -783,6 +741,10 @@ fn validate_step(
 
     // Copy the session fields the checks need BEFORE borrowing the basis, so
     // the basis reference (tied to the session borrow) can live alone.
+    if let Err(e) = crate::runtime::display::check(backend, session.display_generation) {
+        session.state = SessionState::Faulted;
+        return Err(e);
+    }
     let session_input_sequence = session.input_sequence;
     let session_geometry = session.geometry.clone();
 
@@ -833,7 +795,7 @@ fn validate_step(
 
     let action = actions::parse_action(action_value)?;
     for pos in action.positions() {
-        if !basis.map.contains(pos) {
+        if !crate::runtime::display_input::contains(&basis, pos) {
             return Err(ToolError::new(
                 codes::INVALID_ACTION,
                 format!(

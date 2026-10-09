@@ -69,6 +69,7 @@ pub(super) fn native_main(
     cancel: Arc<AtomicBool>,
     session_started: Arc<Mutex<Option<Instant>>>,
     generation: RequestGeneration,
+    feedback: Option<crate::feedback::FeedbackHandle>,
 ) {
     let backend: Box<dyn Backend> = match factory {
         BackendFactory::Desktop => match DesktopBackend::new() {
@@ -90,7 +91,10 @@ pub(super) fn native_main(
             }
         }
     };
-    let mut runtime = Runtime::new(backend, Arc::clone(&cancel));
+    let mut runtime = match &feedback {
+        Some(f) => Runtime::new_with_feedback(backend, Arc::clone(&cancel), f.clone()),
+        None => Runtime::new(backend, Arc::clone(&cancel)),
+    };
     if init_tx.send(Ok(())).is_err() {
         return; // caller gave up before we finished init
     }
@@ -123,6 +127,23 @@ pub(super) fn native_main(
                 }
             }
             _ => {
+                if feedback.as_ref().is_some_and(|f| f.is_terminated()) {
+                    if let Some(tx) = &item.reply {
+                        let _ = tx.send(Reply::err(crate::runtime::error::ToolError::new(
+                            "cancelled",
+                            "desktop feedback revoked control before native dispatch",
+                        )));
+                    }
+                    if done_tx
+                        .send(Completion {
+                            kind: CompletionKind::Ordinary,
+                        })
+                        .is_err()
+                    {
+                        return;
+                    }
+                    continue;
+                }
                 // PRE-NATIVE EPOCH CHECK: the dispatch→native gap is real —
                 // a stop can land after the coordinator stamped and admitted
                 // this call but before the native thread picks it up. Open /
@@ -286,5 +307,122 @@ fn track_session_clock(name: &str, reply: &Reply, session_started: &Arc<Mutex<Op
         "computer_open" => *g = Some(Instant::now()),
         "computer_close" => *g = None,
         _ => {}
+    }
+}
+
+/// Gate + forward one client command to the native thread.
+/// Returns false if the native thread is gone.
+pub(super) fn dispatch_command(
+    cmd: super::Command,
+    work_tx: &SyncSender<WorkItem>,
+    generation: &RequestGeneration,
+    native_busy: &mut bool,
+) -> bool {
+    let super::Command::Call {
+        name,
+        args,
+        reply,
+        gen,
+    } = cmd;
+    // Generation gate: only an open/resume queued BEFORE a stop is refused.
+    // A fresh deliberate open/resume (stamped at the current generation)
+    // proceeds; the runtime re-validates state and clears the flag itself
+    // only after safe cleanup/geometry checks.
+    if matches!(name.as_str(), "computer_open" | "computer_resume") && gen != generation.current() {
+        let _ = reply.send(Reply::err(crate::runtime::error::ToolError::new(
+            "cancelled",
+            "this request was queued before a stop was requested; issue a fresh request after cleanup",
+        )));
+        return true;
+    }
+    match work_tx.send(WorkItem {
+        name,
+        args,
+        reply: Some(reply),
+        gen,
+    }) {
+        Ok(()) => {
+            *native_busy = true;
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod feedback_tests {
+    use super::*;
+    use std::sync::mpsc::{channel, sync_channel};
+    #[test]
+    fn permanent_feedback_revocation_refuses_fresh_epochs_at_native_gap() {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let generation = RequestGeneration::new_for_test();
+        let stop_cancel = cancel.clone();
+        let stop_gen = generation.clone();
+        let feedback = crate::feedback::FeedbackHandle::new(Arc::new(move || {
+            stop_gen.bump();
+            stop_cancel.store(true, Ordering::SeqCst);
+        }))
+        .unwrap();
+        let (work_tx, work_rx) = sync_channel(1);
+        let (done_tx, done_rx) = sync_channel(4);
+        let (init_tx, init_rx) = channel();
+        let facts = feedback.clone();
+        let native_cancel = cancel.clone();
+        let native_gen = generation.clone();
+        let native = std::thread::spawn(move || {
+            native_main(
+                BackendFactory::Mock,
+                work_rx,
+                done_tx,
+                init_tx,
+                native_cancel,
+                Arc::new(Mutex::new(None)),
+                native_gen,
+                Some(facts),
+            )
+        });
+        init_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap()
+            .unwrap();
+        feedback.terminate();
+        for name in ["computer_open", "computer_resume", "computer_step"] {
+            let (reply, rx) = channel();
+            work_tx
+                .send(WorkItem {
+                    name: name.into(),
+                    args: serde_json::json!({}),
+                    reply: Some(reply),
+                    gen: generation.current(),
+                })
+                .unwrap();
+            let reply = rx.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+            assert!(reply.is_error);
+            assert_eq!(reply.data["error"]["code"], "cancelled");
+            done_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap();
+        }
+        assert!(cancel.load(Ordering::SeqCst));
+        work_tx
+            .send(WorkItem {
+                name: "__shutdown".into(),
+                args: serde_json::json!({}),
+                reply: None,
+                gen: CONTROL_GEN,
+            })
+            .unwrap();
+        assert!(matches!(
+            done_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap()
+                .kind,
+            CompletionKind::Shutdown {
+                is_error: false,
+                ..
+            }
+        ));
+        native.join().unwrap();
     }
 }

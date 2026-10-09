@@ -135,6 +135,13 @@ fn invalid_chord_injects_zero_events() {
         json!({"kind": "click", "position": [-1, 0]}),
         json!({"kind": "click", "position": [1600, 0]}),
         json!({"kind": "text_input", "text": "x".repeat(4097)}),
+        // Per-scalar planning regression: the whole payload must be
+        // rejected at parse time, so no scalar before the control char is
+        // ever injected.
+        json!({"kind": "text_input", "text": "abc\0"}),
+        json!({"kind": "text_input", "text": "ok\u{1}later"}),
+        json!({"kind": "text_input", "text": "bell\u{7}"}),
+        json!({"kind": "text_input", "text": "a\u{7f}b"}),
     ] {
         let before = b.events().len();
         let rec = step(
@@ -388,14 +395,20 @@ fn cancellation_before_first_input_is_not_started() {
 
 #[test]
 fn cancellation_during_hold_stops_promptly() {
+    use crate::runtime::testutil::race::{RaceGate, RaceTask};
     let (mut s, mut b, c) = setup(1600, 900);
     let obs = observe(&mut s, &mut b, &c);
+    let gate = Arc::new(RaceGate::default());
+    b.after_key_press_gate = Some(gate.clone());
     let cancel = c.clone();
-    let handle = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(120));
+    // The backend has validated and recorded the real mock press and marked
+    // shift held before this helper can send cancel. PNG/preflight latency is
+    // deliberately NOT part of the cancellation-response measurement.
+    let stopper = RaceTask::spawn(gate, c.clone(), move || {
+        let sent = Instant::now();
         cancel.store(true, Ordering::SeqCst);
+        sent
     });
-    let started = Instant::now();
     let rec = step(
         &mut s,
         &mut b,
@@ -404,14 +417,36 @@ fn cancellation_during_hold_stops_promptly() {
         &obs.meta.observation_id,
         json!({"kind": "key_hold", "key": "shift", "duration_ms": 5000}),
     );
-    handle.join().unwrap();
+    let finished = Instant::now();
+    let cancel_sent = stopper.finish();
     assert!(rec.cancelled);
     assert_eq!(rec.input_outcome, InputOutcome::Partial); // press was injected
     assert!(
-        started.elapsed() < Duration::from_secs(2),
-        "cancel must be prompt"
+        finished.duration_since(cancel_sent) < Duration::from_secs(2),
+        "cancel must be prompt after delivery, independently of setup/PNG work"
     );
     assert_eq!(rec.cleanup_outcome, CleanupOutcome::Released);
+    assert!(
+        matches!(b.events().first(), Some(InputEvent::Key { key, direction: crate::backend::Direction::Press }) if key == "shift")
+    );
+    assert_eq!(
+        b.events()
+            .iter()
+            .filter(|e| matches!(
+                e,
+                InputEvent::Key {
+                    direction: crate::backend::Direction::Press,
+                    ..
+                }
+            ))
+            .count(),
+        1
+    );
+    assert_eq!(b.release_all_calls(), 1);
+    assert!(
+        b.held_keys.is_empty(),
+        "cancel cleanup must leave no held key"
+    );
 }
 
 #[test]
@@ -464,6 +499,7 @@ fn result_metadata_retained_for_all_registered_requests_images_trimmed() {
             captured_at: Instant::now(),
             png: Vec::new(),
             map: obs.map,
+            regions: obs.regions.clone(),
         };
     }
     // Metadata for ALL requests is retained — none becomes falsely unknown.
@@ -518,6 +554,7 @@ fn image_budget_accounts_all_retained_pngs_once() {
             captured_at: Instant::now(),
             png: Vec::new(),
             map: obs.map,
+            regions: obs.regions.clone(),
         };
         assert!(
             s.image_bytes() <= png_len * 3 + png_len / 2,
@@ -538,3 +575,5 @@ fn single_image_exceeding_budget_errors_without_state_corruption() {
     let err = capture_observation(&mut s, &mut b, 0, &c).unwrap_err();
     assert_eq!(err.code, codes::RESOURCE_LIMIT);
 }
+
+mod multiclick;

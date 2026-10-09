@@ -1,20 +1,20 @@
 //! [`DesktopBackend`]: the real native desktop backend. All held-state /
 //! release / scroll-translation logic lives in the generic [`BackendCore`]
 //! state machine, which is driven through the [`NativeInput`] dispatch seam
-//! (production: [`EnigoInput`]; tests: a recording mock), so the full input
+//! (production: [`DriverInput`]; tests: a recording mock), so the full input
 //! lifecycle is regression-tested without touching a real desktop.
 //!
 //! Stale-geometry rejection is a per-SESSION concern owned by the Runtime
 //! (it validates `geometry()` and `capture.geometry` against the session's
-//! bound geometry and faults on mismatch); the backend itself stays
-//! stateless about geometry so a new Runtime session can always rebind after
+//! bound geometry and faults on mismatch); the backend retains enumeration authority, NOT a stale-session latch, so a new Runtime session can rebind after
 //! a display change without restarting the host process. The pure
 //! [`CaptureGeometryBinding`] policy below encodes exactly that session-side
 //! decision and is unit-tested here so the lifecycle split is pinned by
 //! backend-owned regression evidence.
 
+#[cfg(not(target_os = "windows"))]
 use super::capture::{self, TargetScreen};
-use super::dispatch::{BackendCore, EnigoInput};
+use super::dispatch::{BackendCore, DriverInput};
 use super::{Backend, BackendError, Capture, Geometry, InputEvent};
 /// Native desktop backend. Intentionally NOT `Send`: construct it on the
 /// worker thread that will perform all capture/inject calls.
@@ -34,7 +34,9 @@ use super::{Backend, BackendError, Capture, Geometry, InputEvent};
 /// session fail forever without restarting the host process, while adding
 /// no race protection the Runtime does not already provide.
 pub struct DesktopBackend {
-    core: BackendCore<EnigoInput>,
+    core: BackendCore<DriverInput>,
+    #[cfg(target_os = "windows")]
+    display: super::display::DisplayProvider<rpa_windows_display::GdiProvider>,
 }
 
 impl DesktopBackend {
@@ -48,15 +50,28 @@ impl DesktopBackend {
         super::platform::prepare_thread()?;
         // Fails with a descriptive error when there is no usable primary
         // display (headless session, RDP with no console, etc.).
+        #[cfg(not(target_os = "windows"))]
         capture::target_screen()?;
-        let enigo = super::platform::create_enigo()?;
+        #[cfg(target_os = "windows")]
+        let mut display = super::display::DisplayProvider::new(
+            rpa_windows_display::GdiProvider::attach().map_err(super::display::provider_error)?,
+        )?;
+        #[cfg(target_os = "windows")]
+        display.snapshot()?;
+        let driver = super::platform::create_driver()?;
         Ok(Self {
-            core: BackendCore::new(EnigoInput::new(enigo)),
+            core: BackendCore::new(DriverInput::new(driver)),
+            #[cfg(target_os = "windows")]
+            display,
         })
     }
 }
 
 impl Backend for DesktopBackend {
+    #[cfg(target_os = "windows")]
+    fn display_selections(&self) -> &'static [&'static str] {
+        &["primary", "id", "desktop"]
+    }
     fn platform(&self) -> &'static str {
         std::env::consts::OS
     }
@@ -64,19 +79,61 @@ impl Backend for DesktopBackend {
     fn geometry(&mut self) -> Result<Geometry, BackendError> {
         // Pure query: reflects current display layout/DPI. Input is neither
         // performed nor implied by success.
-        Ok(capture::target_screen()?.geometry())
+        #[cfg(target_os = "windows")]
+        {
+            self.display.geometry()
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Ok(capture::target_screen()?.geometry())
+        }
     }
 
     fn capture(&mut self) -> Result<Capture, BackendError> {
-        let target: TargetScreen = capture::target_screen()?;
-        let geometry = target.geometry();
-        let (png, width, height) = super::platform::capture_screen(&target)?;
-        Ok(Capture {
-            png,
-            width,
-            height,
-            geometry,
-        })
+        #[cfg(target_os = "windows")]
+        {
+            let c = self
+                .display
+                .capture(super::display::budget::requested(1366, 768)?)?;
+            Ok(Capture {
+                width: c.mapping.size().width,
+                height: c.mapping.size().height,
+                png: c.png,
+                geometry: c.geometry,
+            })
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let target: TargetScreen = capture::target_screen()?;
+            let geometry = target.geometry();
+            let (png, width, height) = super::platform::capture_screen(&target)?;
+            Ok(Capture {
+                png,
+                width,
+                height,
+                geometry,
+            })
+        }
+    }
+    #[cfg(target_os = "windows")]
+    fn display_snapshot(
+        &mut self,
+    ) -> Result<Option<rpa_display_topology::TopologySnapshot>, BackendError> {
+        self.display.snapshot().map(Some)
+    }
+    #[cfg(target_os = "windows")]
+    fn select_display(
+        &mut self,
+        s: &rpa_display_topology::Selection,
+    ) -> Result<Geometry, BackendError> {
+        self.display.select(s)
+    }
+    #[cfg(target_os = "windows")]
+    fn capture_display(
+        &mut self,
+        b: rpa_display_topology::CaptureBudget,
+    ) -> Result<Option<super::display::DisplayCapture>, BackendError> {
+        self.display.capture(b).map(Some)
     }
 
     fn inject(&mut self, event: &InputEvent) -> Result<(), BackendError> {
@@ -101,8 +158,7 @@ impl Backend for DesktopBackend {
 /// opened after the change binds to the NEW geometry and captures normally.
 /// That is what lets native captures recover after a normal close + fresh
 /// open without restarting the host process; the backend keeps no
-/// cross-session geometry memory (enforced structurally: [`DesktopBackend`]
-/// has no geometry field).
+/// cross-session geometry memory (the persistent Windows tracker records current facts, not a stale-session latch).
 ///
 /// This mirrors the checks the Runtime performs in
 /// `runtime::session::capture_observation`: `geometry()` is checked BEFORE

@@ -1,0 +1,5 @@
+Controlled native-input diagnostic, NOT a blind visual-transcription benchmark. The test deliberately supplies the intended payload so image/OCR mistakes can be separated from injection mistakes.
+Only computer_* MCP tools. Never shell/files/browser/clipboard/API/other user apps. Open a computer session max_width1440,max_height1000 and observe the visible Computer Use Acceptance fixture. If not visible or locked, close and stop.
+Perform THREE independent attempts. For each click the fixture text area, select all using ctrl+a on Windows or meta+a on macOS, then issue ONE text_input action whose text is EXACTLY the following single line (no leading/trailing spaces, quotes or newline):
+你好，世界 🌍 | Unicode 测试 ✅ | 本文档共 3 段（含本段）
+Click the visible Check text button and report the actual MATCHED/MISMATCH status from the screenshot. Do not silently retry or alter text to force matching. It is acceptable to repeat within the same fixture trial; do not click Next trial. Record each attempt's actual result independently. At end computer_close, leave the fixture window open. Unique request_ids and latest based_on each action. Dispatched alone does not prove text correctness.

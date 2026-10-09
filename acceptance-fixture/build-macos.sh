@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$SCRIPT_DIR/macos/main.swift"
+SRC_CASES="$SCRIPT_DIR/macos/Cases.swift"
 OUT_DIR="${1:-$SCRIPT_DIR/build/macos}"
 APP="$OUT_DIR/ComputerUseAcceptance.app"
 
@@ -15,7 +16,7 @@ if [ -e "$APP" ]; then
 fi
 
 mkdir -p "$APP/Contents/MacOS"
-xcrun swiftc -O -o "$APP/Contents/MacOS/ComputerUseAcceptance" "$SRC"
+xcrun swiftc -O -o "$APP/Contents/MacOS/ComputerUseAcceptance" "$SRC" "$SRC_CASES" "$SCRIPT_DIR"/macos/Gesture*.swift
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

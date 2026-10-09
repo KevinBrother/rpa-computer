@@ -55,6 +55,8 @@ use crate::backend::BackendError;
 use crate::mcp::backend_factory::BackendFactory;
 use crate::runtime::Reply;
 
+#[path = "../feedback/worker_lifecycle.rs"]
+mod feedback_lifecycle;
 mod native;
 #[cfg(test)]
 mod tests;
@@ -225,6 +227,8 @@ pub struct Worker {
     /// may still be live). Once set, the worker refuses every call and never
     /// reports a clean state again — the transport must quarantine.
     faulted: Arc<AtomicBool>,
+    feedback: Option<crate::feedback::FeedbackHandle>,
+    feedback_host: Mutex<Option<crate::feedback::FeedbackHost>>,
 }
 
 impl std::fmt::Debug for Worker {
@@ -239,71 +243,22 @@ impl Worker {
     /// Spawn coordinator + native threads and construct the backend *inside*
     /// the native thread. `factory` decides native vs explicit test backend.
     pub fn start(factory: BackendFactory) -> Result<Self, WorkerError> {
-        let cancel = Arc::new(AtomicBool::new(false));
-        let generation = RequestGeneration::new();
-        let (tx, rx) = sync_channel::<Command>(MAX_QUEUED_COMMANDS);
-        let (ctrl_tx, ctrl_rx) = channel::<Control>();
-        let (init_tx, init_rx) = channel::<Result<(), BackendError>>();
-        let session_started = Arc::new(Mutex::new(None::<Instant>));
-        let shutdown_status = Arc::new(Mutex::new(None::<ShutdownStatus>));
-        let stash_len = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let cancel_for_thread = Arc::clone(&cancel);
-        let generation_for_thread = generation.clone();
-        let started_for_thread = Arc::clone(&session_started);
-        let status_for_thread = Arc::clone(&shutdown_status);
-        let stash_for_thread = Arc::clone(&stash_len);
+        Self::start_with_feedback(factory, crate::feedback::FeedbackConfig::default())
+    }
 
-        let join = std::thread::Builder::new()
-            .name("computer-runtime".into())
-            .spawn(move || {
-                coordinator_main(
-                    factory,
-                    rx,
-                    ctrl_rx,
-                    init_tx,
-                    CoordShared {
-                        cancel: cancel_for_thread,
-                        generation: generation_for_thread,
-                        session_started: started_for_thread,
-                        shutdown_status: status_for_thread,
-                        stash_len: stash_for_thread,
-                    },
-                )
-            })
-            .map_err(|_| WorkerError::Dead)?;
+    pub fn start_with_feedback(
+        factory: BackendFactory,
+        config: crate::feedback::FeedbackConfig,
+    ) -> Result<Self, WorkerError> {
+        Self::start_config(factory, config, None)
+    }
 
-        match init_rx.recv() {
-            Ok(Ok(())) => {
-                let transport_gate = TransportGate::new();
-                let active = transport_gate.active_view();
-                Ok(Worker {
-                    handle: Some(WorkerHandle {
-                        tx,
-                        ctrl_tx,
-                        session_started,
-                        join: Mutex::new(Some(join)),
-                        shutdown_status,
-                        stash_len,
-                    }),
-                    cancel,
-                    active,
-                    generation,
-                    transport_gate,
-                    faulted: Arc::new(AtomicBool::new(false)),
-                })
-            }
-            Ok(Err(e)) => {
-                let _ = join.join();
-                Err(WorkerError::BackendUnavailable {
-                    code: e.code,
-                    message: e.message,
-                })
-            }
-            Err(_) => {
-                let _ = join.join();
-                Err(WorkerError::Dead)
-            }
-        }
+    pub fn start_with_feedback_shutdown(
+        factory: BackendFactory,
+        config: crate::feedback::FeedbackConfig,
+        shutdown: Arc<AtomicBool>,
+    ) -> Result<Self, WorkerError> {
+        Self::start_config(factory, config, Some(shutdown))
     }
 
     pub fn cancel_handle(&self) -> CancelHandle {
@@ -389,6 +344,9 @@ impl Worker {
                 "runtime worker is not running",
             )));
         };
+        if self.feedback.as_ref().is_some_and(|f| f.is_terminated()) {
+            return Err(Reply::err(crate::runtime::error::ToolError::new("cancelled", "desktop feedback permanently revoked this Host child's control; use a fresh connection")));
+        }
         if self.faulted.load(Ordering::SeqCst) {
             return Err(Reply::err(crate::runtime::error::ToolError::new(
                 "worker_faulted",
@@ -562,67 +520,16 @@ impl Worker {
     /// `Unknown` means a native call never returned or cleanup failed — the
     /// worker is then FAULTED and must be quarantined, never reported clean.
     pub fn shutdown(&self) -> ShutdownStatus {
-        // Epoch first, then the flag (see CancelHandle::cancel).
-        self.generation.bump();
-        self.cancel.store(true, Ordering::SeqCst);
-        self.active.set(None);
-        let Some(handle) = self.handle.as_ref() else {
-            return ShutdownStatus::NotNeeded;
-        };
-        let join = handle.join.lock().ok().and_then(|mut g| g.take());
-        let Some(join) = join else {
-            // Already shut down once; report the recorded outcome.
-            return handle
-                .shutdown_status
-                .lock()
-                .ok()
-                .and_then(|g| *g)
-                .unwrap_or(ShutdownStatus::NotNeeded);
-        };
-        // Quit is control, not data: the control channel is unbounded, so a
-        // flooded client queue can never delay shutdown.
-        let _ = handle.ctrl_tx.send(Control::Quit);
-        let (done_tx, done_rx) = channel();
-        let spawned = std::thread::Builder::new()
-            .name("computer-worker-join".into())
-            .spawn(move || {
-                let _ = join.join();
-                let _ = done_tx.send(());
-            });
-        if spawned.is_err() {
-            // Could not even spawn the join helper: a bounded join is
-            // impossible; report unknown honestly.
-            eprintln!("[computer-host] cannot spawn join helper; shutdown_unknown");
-            self.mark_unknown(handle);
+        let status = self.shutdown_native_worker();
+        crate::feedback::worker::record_shutdown(self.feedback.as_ref(), status);
+        if !crate::feedback::worker::stop_renderer(&self.feedback_host) {
+            self.faulted.store(true, Ordering::SeqCst);
+            if let Some(handle) = &self.handle {
+                self.mark_unknown(handle);
+            }
             return ShutdownStatus::Unknown;
         }
-        match done_rx.recv_timeout(MAX_SHUTDOWN_CONFIRM) {
-            Ok(()) => {
-                let status = handle
-                    .shutdown_status
-                    .lock()
-                    .ok()
-                    .and_then(|g| *g)
-                    .unwrap_or(ShutdownStatus::Clean);
-                // A faulted worker (abandoned native call, failed cleanup)
-                // is NEVER reported clean — even if the coordinator managed
-                // to exit. Unknown sticks.
-                if shutdown_is_quarantined(status) || self.is_faulted() {
-                    self.mark_unknown(handle);
-                    return ShutdownStatus::Unknown;
-                }
-                status
-            }
-            Err(_) => {
-                eprintln!(
-                    "[computer-host] shutdown confirmation exceeded {}s; reporting shutdown_unknown \
-                     (a native call never returned; cleanup state cannot be guaranteed)",
-                    MAX_SHUTDOWN_CONFIRM.as_secs()
-                );
-                self.mark_unknown(handle);
-                ShutdownStatus::Unknown
-            }
-        }
+        status
     }
 
     /// Record a faulted shutdown outcome that cannot be reverted by later
@@ -656,6 +563,7 @@ struct CoordShared {
     /// dispatched; `Worker::call` counts ingress + stash so the WHOLE pending
     /// population is bounded.
     stash_len: Arc<std::sync::atomic::AtomicUsize>,
+    feedback: Option<crate::feedback::FeedbackHandle>,
 }
 
 /// Coordinator thread: queueing, watchdog, cancel policy. Runs no native
@@ -673,6 +581,7 @@ fn coordinator_main(
         session_started,
         shutdown_status,
         stash_len,
+        feedback,
     } = shared;
     // Work items for the native thread, one at a time (serial execution).
     let (work_tx, work_rx) = sync_channel::<WorkItem>(1);
@@ -684,6 +593,7 @@ fn coordinator_main(
     let native_cancel = Arc::clone(&cancel);
     let native_started = Arc::clone(&session_started);
     let native_generation = generation.clone();
+    let native_feedback = feedback.clone();
     let native_join = std::thread::Builder::new()
         .name("computer-native".into())
         .spawn(move || {
@@ -695,6 +605,7 @@ fn coordinator_main(
                 native_cancel,
                 native_started,
                 native_generation,
+                native_feedback,
             )
         });
 
@@ -888,7 +799,7 @@ fn coordinator_main(
                 }
             } else if let Some(cmd) = stash.pop_front() {
                 stash_len.fetch_sub(1, Ordering::SeqCst);
-                if !dispatch_command(cmd, &work_tx, &generation, &mut native_busy) {
+                if !native::dispatch_command(cmd, &work_tx, &generation, &mut native_busy) {
                     native_done = true;
                     final_status = ShutdownStatus::Unknown;
                     break;
@@ -896,7 +807,7 @@ fn coordinator_main(
             } else {
                 match rx.try_recv() {
                     Ok(cmd) => {
-                        if !dispatch_command(cmd, &work_tx, &generation, &mut native_busy) {
+                        if !native::dispatch_command(cmd, &work_tx, &generation, &mut native_busy) {
                             native_done = true;
                             final_status = ShutdownStatus::Unknown;
                             break;
@@ -961,6 +872,7 @@ fn coordinator_main(
         }
     }
 
+    crate::feedback::worker::record_shutdown(feedback.as_ref(), final_status);
     if let Ok(mut g) = shutdown_status.lock() {
         *g = Some(final_status);
     }
@@ -990,44 +902,5 @@ fn coordinator_main(
     }
     while let Ok(cmd) = rx.try_recv() {
         reject_call(cmd, drain_code, "runtime worker is shutting down");
-    }
-}
-
-/// Gate + forward one client command to the native thread.
-/// Returns false if the native thread is gone.
-fn dispatch_command(
-    cmd: Command,
-    work_tx: &SyncSender<WorkItem>,
-    generation: &RequestGeneration,
-    native_busy: &mut bool,
-) -> bool {
-    let Command::Call {
-        name,
-        args,
-        reply,
-        gen,
-    } = cmd;
-    // Generation gate: only an open/resume queued BEFORE a stop is refused.
-    // A fresh deliberate open/resume (stamped at the current generation)
-    // proceeds; the runtime re-validates state and clears the flag itself
-    // only after safe cleanup/geometry checks.
-    if matches!(name.as_str(), "computer_open" | "computer_resume") && gen != generation.current() {
-        let _ = reply.send(Reply::err(crate::runtime::error::ToolError::new(
-            "cancelled",
-            "this request was queued before a stop was requested; issue a fresh request after cleanup",
-        )));
-        return true;
-    }
-    match work_tx.send(WorkItem {
-        name,
-        args,
-        reply: Some(reply),
-        gen,
-    }) {
-        Ok(()) => {
-            *native_busy = true;
-            true
-        }
-        Err(_) => false,
     }
 }

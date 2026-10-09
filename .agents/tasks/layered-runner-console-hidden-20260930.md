@@ -1,0 +1,4 @@
+后续最小环境修复：只新增 .agents/runs/layered-gui-helpers-20260930/gui-runner-launch-20260930.ps1 及你报告新一小节，不改其他已运行文件、不GUI、不SSH、不delegate、不commit。
+现有 .agents/runs/native-gui-helpers-20260929/gui-runner-launch-20260929.ps1 启动Interactive ScheduledTask直接powershell.exe -File。真实Windows新25min background在运行，agent powershell启动后会创建新terminal窗口覆盖normal backdrop（图 .agents/runs/layered-win-known-input-live-frame-20260930.png），之前不能单归为5min timer。用户允许neutral背景但不动用户窗口；应让我们新建runner控制台本身hidden而不是全局hide其他app。
+复制原launcher到唯一新名称，只在构建的PowerShell参数加入 `-WindowStyle Hidden`，保持Interactive principal/Session1、Limited、-File直接执行、路径/参数验证、GUIDtask不覆盖、严格process identity和record action/command_line字段（使用同一最终argList）。不隐藏fixture.exe，其仍由fixturestart独立启动。本helper只用于后续runs，不打断当前known-inputagent。原stop20260929脚本必须仍能以新record严格核验和清理（same contract），不能宽松匹配。
+非GUI验证参数结构/tokenizer/grep断言，报告诚实说WindowStyle是否在WindowsTerminal实际隐藏要coord下一轮实拍确认，不宣称已验收。不随手改定时器、MAC等。

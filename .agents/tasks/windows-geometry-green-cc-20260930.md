@@ -1,0 +1,17 @@
+# Windows geometry StageB independent review + pure execution
+
+Read final SOURCE_FROZEN `.agents/reports/windows-geometry-sol-20260930.md`/manifest and geometryEOFplan. Author onlycode+compile; you realCC+GLM do independentreview/tests. Actualglm-5.3-flash, noAgent/Task. No source/test/build fixes, noMac/Linux test/GUI/Host/renderer/nativeinput/capture/network/security/globalsettings/worktree/commit. Session0pureconsole, protectNotepad24332. Do not run --suite geometry UI; allconsole paths beforeWinForms.
+
+Review semantic scope first: geometry10 independentcases + modes, preserved239assertions andold63/basic20/focus10/nativepolicy; unknown/environment vsGUIhonest; no automaticDPI/displaychanges; own-onlyWM evidence; 06pure notGUI;09targetdisappearance nottopology;07/08actualsystemchange proofnotformmove;10actualPNGbytes notmetadata-selfcompare, bounded parsing and invalid/missing/truncation rejection. Fulltrace matching8tools+actualGLM+uniquetrial/nonce/input/result/observation needed, no lackevents=pass. Frame/regionmapping carriespositive andnegative cases. If independentreview findsconcreteblocker reportbefore broadexecution, don't fix.
+
+New uniqueWindowsTEMP, exactmanifestall dependencies+frozenrunner correctpath. Verify sourcehashes local/remote before/after; plain default buildhelper WindowsFrameworkcsc newout (no reusedoldexe, no specialflags), captureactualexit+newexeSHA. BoundedevidencePARENTnotleaf.
+Executiondefaultsequence(each120s, firstnativeFAILstop, neverrerunforgreen):
+1 --self-test: original237 PASS retained, twoStageArequirements nowPASS, actualtotalfromstdout.
+2 export independentgeometry10 pluslegacy63/basic20/focus10/nativepolicy toNEWpaths, inspectJSONindependentlymodes/counts/GUIgates/policy; exportsnotGUIproof.
+3 geometryanalyzer tests withrealWindowspython absoluteexe; thennative25/focus35/B2 30/gesture andlayeredanalyzer existingtests asdependenciesaffected (readexactfinalreport recommendations beforechoosing, no arbitrarynewcommands).
+4 legacy63parity withSwiftcatalogREADONLYdata(noSwift/Macexecution).
+No productRustcodebuild/testhere; EOFCC independentlyownsRustsubprocessverification.
+
+Perstepnativeexit/timeouts/rootidentity/completeoutdrain/cleanup recorded, allraw retained. Firstfailure reportassertion/source/hash andunrunsteps. Exactownedread-onlyresidualcheck, noglobal/namekill. Report `.agents/reports/windows-geometry-green-cc-20260930.md`, runsamebasename, conciseactualcounttables andboundaries. No geometryGUI/highDPI/systemchange/physicalmultidisplay acceptance claim; tenvalidtrialsstillpending. Stopafterreport.
+
+FINAL handoff override: author longreport was deliberately notgenerated toavoidblockingexecution. Instead read `.agents/reports/windows-geometry-handoff-20260930.md` + exactplan/source. Final44entrymanifest `.agents/reports/windows-geometry-sol-20260930-artifacts-234523/frozen-source-sha256.txt` SHA ca5b1d8ab4fcf4c042cd89d88d1e0a5d4d13f2537d11109d03236c5081856970; samefolder frozen-source.tar.gz isexact44filebundle, coordinatorverified44/44 currentmatches. Authorconfirmedallsourcewritesstopped. No need waitformissingreport; independentlyreviewactualsource andplan. PNGunsupportedencodings unknown deliberate, not GUIproof; needsoffset/DPIcapabilities honest. Defaultcsc/selftest/newanalyzer tests/regressions/export/parity allstillpending. Prior237+2StageAclaims strictlyhistorical. IfstepsdatecrossesmidnightAsiaShanghai, recordactualtimestamp butkeepassignedrunpaths toavoidduplicateattempts.

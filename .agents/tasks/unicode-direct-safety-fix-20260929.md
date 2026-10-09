@@ -1,0 +1,6 @@
+Edit ONLY .agents/runs/unicode-direct-sendinput-20260929.ps1. Narrow review fixes. No GUI/SSH/production edits. Use max 1 Read, direct edits, syntax/static check; don't redesign.
+1. char mode partial count bug: SendChar currently sets unitIndexSent=units on failed SendCore then returns total, so PowerShell thinks complete. On any sent != one.Count throw InvalidOperationException with counts. Caller catch already writes error JSON. Keep completion count accurate.
+2. batch expected count is UTF16 code units *2, NOT Unicode scalars*2. PowerShell use $expectedText.Length*2 for expected count. Keep units as scalar count in metadata.
+3. add static uint ExpectedForegroundPid set from PowerShell ExpectedPid after identity. In SendCore before every input call require ForegroundPid()==ExpectedForegroundPid, except stage ctrl_release_recovery which is allowed to release our modifier only. Throw before sending on mismatch. This enforces char modes check between each scalar. Don't bypass foreground restrictions.
+4. LastWin32Error=0 on full success (GetLastWin32Error undefined/stale after success), capture on mismatch only.
+5. self read/static confirm these fixes and report; Windows execution done by coordinator. No more than 5 turns needed.

@@ -111,3 +111,36 @@ Public backend trait allows mock implementations in tests/runtime_contract.rs. U
 ## Black-box boundary (coordinator + qa)
 
 Release directory outside repository contains only binaries, MCP config, test prompt, allowed screenshots. No symlink to source, no CLAUDE.md auto-discovery of repo, no Read/Bash/Glob/Grep tools, strict MCP config, no browser tools. Apply OS filesystem deny rule for whole source tree to external Claude test process where supported; test deny with negative probe, record tool inventory. Compiler/build agents may access source; GUI Agent may not. This distinction must appear in report.
+
+## 2026-09-30 confirmed extension: atomic multi-click metadata and optional desktop feedback
+
+This section supersedes the older Button signatures above for the new implementation only. No compatibility shims or silent no-op support required. Old GUI evidence remains immutable.
+
+- `PlanEvent::Button` and `InputEvent::Button` carry `click_count: u8` (1..=3). It is the native click-state of THIS press/up pair, not an instruction for a driver loop. For `Action::Click { count: N }`, Runtime emits pairs with click_count=1,2,...N and owns inter-pair timing/cancellation. Drag and ordinary button actions use1.
+- Backend dispatch `NativeInput::button` and extractable crate `Driver::button` carry the same explicit click_count. Invalid counts reject before native dispatch. macOS uses the value in CGEvent mouse click-state for button events. Windows/X11 still emit real atomic button events; OS time/location aggregation is documented and live-tested, not replaced with a no-op. No sleep/whole-click loop inside the driver.
+- Held-button cleanup remembers the last dispatched/intended press metadata per button, tracks uncertain press before dispatch, releases matching metadata, and forgets only on confirmed successful release. Keep single held-state authority in Host; native crate's standalone Input wrapper remains independently usable.
+- GUI feedback is an OPTIONAL project-supplied module on the controlled Host desktop. Native input has zero dependency on renderer/framework/IPC. Runtime exposes truthful state and cancellation seams; optional presenter consumes them. Off/unloaded path must run unchanged with no UI processes/permissions. Default presentation prioritizes clear AI ownership/status, lightweight pointer/click feedback and a real stop entry; branding can be replaced, blue glow is later polish.
+- Stop revokes/cancels actual control and reports release failures/unknown; it does not merely hide UI. Decoration must not intercept input or steal focus; capture exclusion must be verified rather than assumed from window transparency. Current screenshot API has no promised exclusion support.
+- First coding round ownership: atomic-input worker owns `crates/native-input/**` and required Rust button-event integration/test callsites under `src/**` and `tests/**/*.rs` ONLY. It does not change capture/geometry/protocol features. Gesture-fixture worker owns `acceptance-fixture/**` plus NEW gesture analyzer/tests/tasks; no Rust or existing text-analyzer modifications. Coordinator owns this contract/plans. UI/multi-display Rust writers wait until first round integrates.
+
+## 2026-09-30 代码实施者切换（用户最新指示）
+
+后续源码/测试/构建实现改用 `gpt-6.1-sol` subagent；覆盖旧的 Claude CLI-only 开发限制。真实 GUI 验收继续 Claude CLI + GLM。旧 atomic-multiclick 与 gesture-fixture 实现 CLI 已停止（见 `.agents/runs/implementation-handoff-sol-20260930.json`），保留部分实现。接手 subagent 继续原写集；新增反馈模块工作只允许独立目录，Host/Runtime接线待原子输入任务结束后再分配。所有角色不 commit/push、不 worktree、不得真实桌面输入。
+
+### 2026-09-30 角色边界补充（最新用户纠正）
+
+代码/测试代码/脚本实现：Codex + gpt-6.1-sol subagent。测试执行、独立验证和点击等真实GUI验收：真实CC + GLM。四个实现subagent已收到指令，停止承担测试执行，仅继续源码和必要编译检查；待验收命令由其交付，协调者分配给CC。开发自检不能替代CC验收，纯测试也不能替代真实GUI证据。CC发现缺陷交回Codex实现者修复。
+
+### 2026-09-30 用户平台测试顺序覆盖
+
+仅Windows测试先行；不新开Mac/Linux测试。Mac GUI session94054协调者及owned fixture48530/backdrop48668/Host48911/innerCC48866已按身份停止，无上述owned残留；中断记录在macos-layered-regression-cc-20260930/user-windows-priority-stop.json。Windows测试仍CC+GLM，代码修复仍gpt-6.1-sol。跨编译不是本机Mac验收。保留Mac/Linux待测与全部旧证据。
+
+## 2026-09-30 Windows multiscreen integration amendment
+
+The original 2026-09-24 dependency/transport paragraphs are historical, not instructions to restore enigo or SSH tunnels. Current native-input uses platform APIs, remote control uses direct TLS, code is authored by Codex gpt-6.1-sol and tests by real CC+GLM. No commits/worktrees. Only Windows is tested now.
+
+The approved complete-actions plan is refined for root integration in `docs/superpowers/plans/2026-09-30-windows-multidisplay-integration.md`. Its locked public choices (8 tools, optional discriminated `computer_open.display`, full topology generation and observation regions, reserved feedback v1 Surface.id=`desktop` for full active desktop, unchanged wire fields and strict message budgets) govern this phase. Root API may evolve under its sole owner; frozen libraries and unrelated fixture write sets must not be edited without explicit defect handoff. No optional renderer dependency enters native-input.
+
+### 2026-09-30 generation wire-token repair exception
+
+Windows StageB independent execution found `metadata::generation`'s Debug string rejected by the unchanged feedback v1 `Surface.version` ASCII-token validator (3 real failures, report `windows-multidisplay-green-cc-20260930.md`). The root owner is explicitly authorized to make the minimal `crates/display-topology/src/topology.rs` public read-only full-generation accessor/token change plus its focused tests, then use that API in root metadata. Preserve complete tracker authority and revision, bounded unambiguous ASCII encoding, and existing feedback Rust/C# validation. Do not loosen wire validation, strip Debug punctuation, truncate identity, or substitute revision-only equality. Existing frozen source/RED evidence stays intact; publish a new repair manifest and independently rerun affected library/root tests through CC+GLM on Windows. Other frozen libraries and renderer files stay outside this exception.

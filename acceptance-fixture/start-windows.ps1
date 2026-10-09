@@ -27,6 +27,10 @@
 param(
     [string]$ExePath = 'C:\Temp\accfix\ComputerUseAcceptance.exe',
     [Parameter(Mandatory = $true)][string]$EvidenceDir,
+    # ValidateSet-guarded: only a fixed suite enum is ever passed to the exe
+    # (as `--suite <name>`), never an arbitrary command.
+    [ValidateSet('legacy', 'baseline', 'punctuation', 'emoji', 'known-input', 'multiclick', 'drag', 'scroll', 'pointer', 'keyboard', 'focus')]
+    [string]$Suite = 'legacy',
     [string]$ExpectedHash = '2A80F568144C68B7370B8DE076F92ECB846F8BEBAF2361AF642AABE9B4ED1F32'
 )
 $ErrorActionPreference = 'Stop'
@@ -88,7 +92,9 @@ $interactiveUser = if ($owner.Domain -and $owner.Domain -ne $env:COMPUTERNAME) {
 } else { $owner.User }
 
 # --- 4. One-off task: directly executes the staged fixture exe ------------
+# Only the fixed suite enum (ValidateSet) is forwarded — no arbitrary args.
 $taskArgs = "--evidence-file `"$oracle`""
+if ($Suite -ne 'legacy') { $taskArgs += " --suite $Suite" }
 $action     = New-ScheduledTaskAction -Execute $stagedExe -Argument $taskArgs
 $principal  = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive -RunLevel Limited
 $settings   = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
@@ -123,6 +129,7 @@ $rec = [ordered]@{
     task_name          = $taskName
     action_execute     = $stagedExe
     action_arguments   = $taskArgs
+    suite              = $Suite
     principal_user     = $interactiveUser
     pid                = [int]$proc.ProcessId
     exe                = $stagedExe

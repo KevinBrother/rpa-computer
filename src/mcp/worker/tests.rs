@@ -61,7 +61,11 @@ impl Backend for FakeBackend {
     fn inject(&mut self, event: &InputEvent) -> Result<(), BackendError> {
         let desc = match event {
             InputEvent::Move { x, y } => format!("move {x},{y}"),
-            InputEvent::Button { button, direction } => format!(
+            InputEvent::Button {
+                button,
+                direction,
+                ..
+            } => format!(
                 "button {button} {}",
                 if *direction == Direction::Press {
                     "down"

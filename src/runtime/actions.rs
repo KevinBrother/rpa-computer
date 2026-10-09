@@ -258,6 +258,13 @@ pub fn parse_action(value: &serde_json::Value) -> Result<Action, ToolError> {
                     "text_input.text must be at most {TEXT_MAX_CHARS} characters, got {chars}"
                 )));
             }
+            // Whole-payload preflight: per-scalar planning means the backend
+            // would otherwise inject every scalar BEFORE rejecting a control
+            // character partway through ("abc\0" must not type "abc"). Shared
+            // C0 policy with the backend boundary (NUL/other C0/DEL rejected;
+            // TAB/LF/CR map to real Tab/Return clicks).
+            crate::backend::keys::validate_text(text)
+                .map_err(|e| invalid(format!("text_input.text: {}", e.message)))?;
             Ok(Action::TextInput {
                 text: text.to_string(),
             })
@@ -502,6 +509,22 @@ mod tests {
         assert!(parse(json!({"kind":"text_input","text":long})).is_err());
         let ok = "汉".repeat(TEXT_MAX_CHARS);
         assert!(parse(json!({"kind":"text_input","text":ok})).is_ok());
+    }
+
+    #[test]
+    fn text_input_rejects_c0_and_del_before_any_plan_exists() {
+        // The whole payload must be rejected at parse time: with per-scalar
+        // planning, a mid-string control character would otherwise be
+        // injected after the preceding scalars had already been dispatched.
+        for bad in [
+            "abc\0", "\0", "a\u{1}b", "a\u{7}b", "a\u{1b}b", "a\u{7f}b", "a\u{1f}b",
+        ] {
+            let err = parse(json!({"kind":"text_input","text":bad})).unwrap_err();
+            assert_eq!(err.code, codes::INVALID_ACTION, "for {bad:?}");
+        }
+        // The three allowed controls pass (they map to real Tab/Return
+        // clicks downstream).
+        assert!(parse(json!({"kind":"text_input","text":"a\tb\nc\rd"})).is_ok());
     }
 
     #[test]

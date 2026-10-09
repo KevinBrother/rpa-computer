@@ -31,21 +31,26 @@ mod capture;
 mod desktop;
 pub(crate) mod dispatch;
 mod dispatch_core;
+pub mod display;
 pub mod keys;
 #[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
 mod live_test;
 
+#[cfg(target_os = "linux")]
+pub(crate) mod linux;
 #[cfg(target_os = "macos")]
 pub(crate) mod macos;
 #[cfg(target_os = "windows")]
 pub(crate) mod windows;
 
+#[cfg(target_os = "linux")]
+use linux as platform;
 #[cfg(target_os = "macos")]
 use macos as platform;
 #[cfg(target_os = "windows")]
 use windows as platform;
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-compile_error!("backend::DesktopBackend supports only macOS and Windows targets");
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+compile_error!("backend::DesktopBackend supports only macOS, Windows and Linux/X11 targets");
 
 pub use capture::{encode_png, target_screen, ScreenCaptureError, TargetScreen};
 pub use desktop::DesktopBackend;
@@ -94,6 +99,8 @@ pub enum InputEvent {
     Button {
         button: String,
         direction: Direction,
+        /// Native click-state of THIS press/up pair (valid 1..=3).
+        click_count: u8,
     },
     Key {
         key: String,
@@ -147,6 +154,35 @@ impl From<ScreenCaptureError> for BackendError {
 /// (CGEventSource / SendInput state) must be created and used on the same
 /// worker thread.
 pub trait Backend {
+    fn display_selections(&self) -> &'static [&'static str] {
+        &["primary"]
+    }
+    /// Complete fresh facts, or explicit primary-only legacy capability. Errors
+    /// must propagate; None is never a fallback for a failed native query.
+    fn display_snapshot(
+        &mut self,
+    ) -> Result<Option<rpa_display_topology::TopologySnapshot>, BackendError> {
+        Ok(None)
+    }
+    fn select_display(
+        &mut self,
+        selection: &rpa_display_topology::Selection,
+    ) -> Result<Geometry, BackendError> {
+        if *selection != rpa_display_topology::Selection::Primary {
+            return Err(BackendError::new(
+                "unsupported_display_selection",
+                "backend supports primary only",
+            ));
+        }
+        self.geometry()
+    }
+    /// Provider owns budgeted composition and exact mapping; legacy returns None.
+    fn capture_display(
+        &mut self,
+        _budget: rpa_display_topology::CaptureBudget,
+    ) -> Result<Option<display::DisplayCapture>, BackendError> {
+        Ok(None)
+    }
     fn platform(&self) -> &'static str;
     /// Current target-display geometry. Must reflect display/DPI changes.
     fn geometry(&mut self) -> Result<Geometry, BackendError>;
@@ -164,7 +200,7 @@ pub trait Backend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum HeldItem {
     Key(ParsedKey),
-    Button(enigo::Button),
+    Button(rpa_native_input::Button),
 }
 
 impl HeldItem {

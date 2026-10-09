@@ -1,0 +1,2 @@
+33fd2d3c60d15ac087f9d9024f0b63fd635d1735d1c4f921fb21ade86fc7724f  acceptance-fixture/windows/NativeTextSelfTest.cs
+851974f9a7a9ec91d9992ef6358562948914f4aabeccd7a989d03fbc40af6e3b  acceptance-fixture/build-windows.ps1

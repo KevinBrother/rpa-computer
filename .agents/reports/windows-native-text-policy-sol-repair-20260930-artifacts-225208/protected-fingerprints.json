@@ -1,0 +1,200 @@
+[
+  {
+    "path": "acceptance-fixture/macos/Cases.swift",
+    "before": "ddeac570dcb252acf6c3870eb6ff176cc9c38d71586322acba90ab871c17a41a",
+    "after": "ddeac570dcb252acf6c3870eb6ff176cc9c38d71586322acba90ab871c17a41a",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/macos/GestureCases.swift",
+    "before": "c5d3a98e9ae09b7c87c4d1f70a4bf4e3688b56f1847748d3406434a081b8e0d0",
+    "after": "c5d3a98e9ae09b7c87c4d1f70a4bf4e3688b56f1847748d3406434a081b8e0d0",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/tools/check-cases-parity.py",
+    "before": "0e1d7422362ca2cfd0049c46d9d8b186931bbf86c1486de850fafd21be038549",
+    "after": "0e1d7422362ca2cfd0049c46d9d8b186931bbf86c1486de850fafd21be038549",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicArguments.cs",
+    "before": "31dbdd36ed71caa50d79a85e1acc7d0b2c6e33f2da177a1116566d341b3fdf59",
+    "after": "31dbdd36ed71caa50d79a85e1acc7d0b2c6e33f2da177a1116566d341b3fdf59",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicCases.cs",
+    "before": "9a40ca4bed926cf4da2cda2e3cdc4429cba6f1d04ec392e261e08c3f965fa6d1",
+    "after": "9a40ca4bed926cf4da2cda2e3cdc4429cba6f1d04ec392e261e08c3f965fa6d1",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicForm.cs",
+    "before": "fe066d214c9d620df1ae2ac37dfeed5e68344b95cf9d7dc2e08d8c1b75cd431a",
+    "after": "fe066d214c9d620df1ae2ac37dfeed5e68344b95cf9d7dc2e08d8c1b75cd431a",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicJudge.cs",
+    "before": "d9783bef6b210d0c7bae25090b416081a855afbc60ef24f5c3023e8542b8cc49",
+    "after": "d9783bef6b210d0c7bae25090b416081a855afbc60ef24f5c3023e8542b8cc49",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicNative.cs",
+    "before": "5c1def6ef4ba51c76522474549d41471f0f0b32206cc1f47f78680475c2b48f8",
+    "after": "5c1def6ef4ba51c76522474549d41471f0f0b32206cc1f47f78680475c2b48f8",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/BasicSelfTest.cs",
+    "before": "cd94a48f450952bfe79aa2a73453e8138fa3af32f080ae9a088f9df224c32a8b",
+    "after": "cd94a48f450952bfe79aa2a73453e8138fa3af32f080ae9a088f9df224c32a8b",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/Cases.cs",
+    "before": "6bf1a8e1b33016f5dddde78a7350550b82914b8753dabd475bc217d40af44909",
+    "after": "6bf1a8e1b33016f5dddde78a7350550b82914b8753dabd475bc217d40af44909",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusCases.cs",
+    "before": "7b0e18d6c7c4854f6b2a7407780c8c0f15ee23a596e7d7584b964b83457f05f4",
+    "after": "7b0e18d6c7c4854f6b2a7407780c8c0f15ee23a596e7d7584b964b83457f05f4",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusForm.cs",
+    "before": "d18d887cc2e5389037f8b16985866f13d313c7c3992679f4734629478efa8447",
+    "after": "d18d887cc2e5389037f8b16985866f13d313c7c3992679f4734629478efa8447",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusJudge.cs",
+    "before": "6696b7e1a9907cd577035ff1f6b77c7e29d48a8972b52728a34c74f5ebcfa9dc",
+    "after": "6696b7e1a9907cd577035ff1f6b77c7e29d48a8972b52728a34c74f5ebcfa9dc",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusNative.cs",
+    "before": "498730fc32e7ff4f693a59d3ad0106ddf84da1a8ca2fe1c5542184fcfa8d98ff",
+    "after": "498730fc32e7ff4f693a59d3ad0106ddf84da1a8ca2fe1c5542184fcfa8d98ff",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusRegression.cs",
+    "before": "b48b2aaf061ab8e0bfd45feecd0a65ebf49145464a50f0821c40425570dd6068",
+    "after": "b48b2aaf061ab8e0bfd45feecd0a65ebf49145464a50f0821c40425570dd6068",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusSelfTest.cs",
+    "before": "39ad3fc966a721b214ce3ed8d33268481bc41060f9f08519e4a23a94799de653",
+    "after": "39ad3fc966a721b214ce3ed8d33268481bc41060f9f08519e4a23a94799de653",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/FocusWindows.cs",
+    "before": "a98aceb2a606ec765932e4fb3194cbcc20f4317304b708a91595f05590ebae17",
+    "after": "a98aceb2a606ec765932e4fb3194cbcc20f4317304b708a91595f05590ebae17",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/GestureCases.cs",
+    "before": "456108a7ab12640ca1abbddc7a27fa2f8923af185e926d1ccb5208050bddbebe",
+    "after": "456108a7ab12640ca1abbddc7a27fa2f8923af185e926d1ccb5208050bddbebe",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/GestureForm.cs",
+    "before": "6772609f0869615ce9ca400f0089a7a22727f5a4b2bc7fc11f39f1b852434082",
+    "after": "6772609f0869615ce9ca400f0089a7a22727f5a4b2bc7fc11f39f1b852434082",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/GestureJudge.cs",
+    "before": "63920ae7d9667ac8696220c7e61211be89a2d16e24911b13e63adead6ac299b4",
+    "after": "63920ae7d9667ac8696220c7e61211be89a2d16e24911b13e63adead6ac299b4",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/GestureNative.cs",
+    "before": "686212d5d0d6622504de5e3d6eaadd40a7990209ce1d4ae374abb6a1c8d256d2",
+    "after": "686212d5d0d6622504de5e3d6eaadd40a7990209ce1d4ae374abb6a1c8d256d2",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/GestureSelfTest.cs",
+    "before": "612d2e8fd5bb8c506429402ba2e89d20273756fbb5a5e1635ce9f777c04e5d0a",
+    "after": "612d2e8fd5bb8c506429402ba2e89d20273756fbb5a5e1635ce9f777c04e5d0a",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/MainForm.cs",
+    "before": "abe033c64c8f04df1a77d8204500697a9b493fe341b4e6849da7c0469b777095",
+    "after": "abe033c64c8f04df1a77d8204500697a9b493fe341b4e6849da7c0469b777095",
+    "unchanged": true
+  },
+  {
+    "path": "acceptance-fixture/windows/NativeTextPolicy.cs",
+    "before": "9bcc9c13293648ff096dc3ae8509987bcbf070b939c0b8671a94140a89ec3cfc",
+    "after": "9bcc9c13293648ff096dc3ae8509987bcbf070b939c0b8671a94140a89ec3cfc",
+    "unchanged": true
+  },
+  {
+    "path": "scripts/analyze-basic-input-gui.py",
+    "before": "630c2f611de4b22e018748ebcea185dc87ef2369b0adf0f085cf0a5ad6d8bd4c",
+    "after": "630c2f611de4b22e018748ebcea185dc87ef2369b0adf0f085cf0a5ad6d8bd4c",
+    "unchanged": true
+  },
+  {
+    "path": "scripts/analyze-focus-gui.py",
+    "before": "5cab0102f0b9c5841a42f0b20fb8603f74bc01eacc8d5b0cb40d94422f342474",
+    "after": "5cab0102f0b9c5841a42f0b20fb8603f74bc01eacc8d5b0cb40d94422f342474",
+    "unchanged": true
+  },
+  {
+    "path": "scripts/analyze-windows-native-text.py",
+    "before": "1e2d6d5dc83774ffcc3dd930cbe846d93208c0f95b6c3a7774c7fa860bca3517",
+    "after": "1e2d6d5dc83774ffcc3dd930cbe846d93208c0f95b6c3a7774c7fa860bca3517",
+    "unchanged": true
+  },
+  {
+    "path": "tests/basic_input_gui_analyzer.py",
+    "before": "cb91d5a8feffc26c5e45b9ae725a0444cc59f910ee0560633a8b100063fe25d9",
+    "after": "cb91d5a8feffc26c5e45b9ae725a0444cc59f910ee0560633a8b100063fe25d9",
+    "unchanged": true
+  },
+  {
+    "path": "tests/focus_gui_analyzer.py",
+    "before": "275a0867b38c3939512f40105e9e45d246c057b954c9c30a9cbd9ddc19096132",
+    "after": "275a0867b38c3939512f40105e9e45d246c057b954c9c30a9cbd9ddc19096132",
+    "unchanged": true
+  },
+  {
+    "path": "tests/windows_native_text_analyzer.py",
+    "before": "edb2760d6269752e272028cbba01f675c1712185c5ed5b19d1df58ef9780dd3e",
+    "after": "edb2760d6269752e272028cbba01f675c1712185c5ed5b19d1df58ef9780dd3e",
+    "unchanged": true
+  },
+  {
+    "path": ".agents/runs/windows-native-text-policy-cc-20260930/computer-native-text-cc-9eee4b27789e4a70b8ba8a167c5ecc72/ntout/selftest-evidence/stdout.log",
+    "before": "ccb39e18ddd0b62a163aaa67da47afbb0458555bd7e76111a670e6b8d95a6a89",
+    "after": "ccb39e18ddd0b62a163aaa67da47afbb0458555bd7e76111a670e6b8d95a6a89",
+    "unchanged": true
+  },
+  {
+    "path": ".agents/runs/windows-native-text-policy-cc-20260930/computer-native-text-cc-9eee4b27789e4a70b8ba8a167c5ecc72/ntout/selftest-evidence/summary.json",
+    "before": "b35ee1df8c6bfb1823197828a4069025934365ad191be1ecff0f8617c7d13c54",
+    "after": "b35ee1df8c6bfb1823197828a4069025934365ad191be1ecff0f8617c7d13c54",
+    "unchanged": true
+  },
+  {
+    "path": ".agents/reports/windows-native-text-policy-cc-20260930.md",
+    "before": "ae1e5499ac825a5d14890903de2ec91d40fe114137862452e397365adeafeb3d",
+    "after": "ae1e5499ac825a5d14890903de2ec91d40fe114137862452e397365adeafeb3d",
+    "unchanged": true
+  }
+]

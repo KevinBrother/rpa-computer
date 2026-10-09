@@ -606,3 +606,10 @@ fn conflicting_reused_request_id_never_borrows_prior_image() {
     assert_eq!(got.data["input_outcome"], "dispatched");
     assert!(got.image_png.is_some());
 }
+
+// Windows-only Task 1 contract tests; no native backend or production changes.
+#[cfg(target_os = "windows")]
+mod multidisplay_contract_red;
+
+#[cfg(target_os = "windows")]
+mod multidisplay_integration;

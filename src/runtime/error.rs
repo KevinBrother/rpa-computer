@@ -44,7 +44,10 @@ pub fn backend_code(e: &BackendError) -> &'static str {
         "input_error" => codes::INPUT_ERROR,
         "cleanup_error" => codes::CLEANUP_ERROR,
         "geometry_changed" => codes::GEOMETRY_CHANGED,
-        "resource_limit" => codes::RESOURCE_LIMIT,
+        "resource_limit" | "output_budget" => codes::RESOURCE_LIMIT,
+        "display_not_found" => "display_not_found",
+        "unsupported_display_selection" => "unsupported_display_selection",
+        "display_error" => "display_error",
         // Validation failures of names/text are action errors.
         "invalid_key" | "invalid_button" | "invalid_text" => codes::INVALID_ACTION,
         // Environment and capture failures.

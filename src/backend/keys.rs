@@ -6,71 +6,73 @@
 //! `up/down/left/right`, `home/end`, `pageup/pagedown`, `f1`-`f12`, and any
 //! single ASCII alphanumeric character (mapped to a REAL key event, never
 //! text injection, so chords like `ctrl+l` are genuine key presses).
+//!
+//! Types come from the `rpa-native-input` crate; this module is a pure
+//! name→typed-key table with no dispatch of its own.
 
-use super::{BackendError, Direction};
+use super::BackendError;
+use rpa_native_input::{Button, Key};
 
 /// A validated key, ready for injection as a real key event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ParsedKey {
     /// A named (non-printable or modifier) key.
-    Named(enigo::Key),
+    Named(Key),
     /// A single ASCII alphanumeric character, always lowercase. Injected as
-    /// `enigo::Key::Unicode(c)` which produces real key press/release events.
+    /// `Key::Character(c)` which produces a real key press/release event via
+    /// the current keyboard layout.
     Ascii(char),
 }
 
 impl ParsedKey {
-    pub fn enigo_key(self) -> enigo::Key {
+    pub fn key(self) -> Key {
         match self {
             ParsedKey::Named(k) => k,
-            ParsedKey::Ascii(c) => enigo::Key::Unicode(c),
+            ParsedKey::Ascii(c) => Key::Character(c),
         }
     }
 
     /// Canonical display name (lowercased input form) for diagnostics.
     pub fn name(self) -> String {
         match self {
-            ParsedKey::Named(k) => format!("{k:?}"),
+            ParsedKey::Named(k) => k.name(),
             ParsedKey::Ascii(c) => c.to_string(),
         }
     }
 }
 
-/// Named keys table: (accepted aliases, enigo key). First alias is canonical.
-const NAMED_KEYS: &[(&[&str], enigo::Key)] = &[
-    (&["ctrl", "control"], enigo::Key::Control),
-    (&["shift"], enigo::Key::Shift),
-    (&["alt", "option"], enigo::Key::Alt),
-    (
-        &["meta", "cmd", "command", "win", "super"],
-        enigo::Key::Meta,
-    ),
-    (&["enter", "return"], enigo::Key::Return),
-    (&["tab"], enigo::Key::Tab),
-    (&["space"], enigo::Key::Space),
-    (&["backspace"], enigo::Key::Backspace),
-    (&["delete"], enigo::Key::Delete),
-    (&["escape", "esc"], enigo::Key::Escape),
-    (&["up"], enigo::Key::UpArrow),
-    (&["down"], enigo::Key::DownArrow),
-    (&["left"], enigo::Key::LeftArrow),
-    (&["right"], enigo::Key::RightArrow),
-    (&["home"], enigo::Key::Home),
-    (&["end"], enigo::Key::End),
-    (&["pageup", "page_up"], enigo::Key::PageUp),
-    (&["pagedown", "page_down"], enigo::Key::PageDown),
-    (&["f1"], enigo::Key::F1),
-    (&["f2"], enigo::Key::F2),
-    (&["f3"], enigo::Key::F3),
-    (&["f4"], enigo::Key::F4),
-    (&["f5"], enigo::Key::F5),
-    (&["f6"], enigo::Key::F6),
-    (&["f7"], enigo::Key::F7),
-    (&["f8"], enigo::Key::F8),
-    (&["f9"], enigo::Key::F9),
-    (&["f10"], enigo::Key::F10),
-    (&["f11"], enigo::Key::F11),
-    (&["f12"], enigo::Key::F12),
+/// Named keys table: (accepted aliases, native key). First alias is canonical.
+const NAMED_KEYS: &[(&[&str], Key)] = &[
+    (&["ctrl", "control"], Key::Control),
+    (&["shift"], Key::Shift),
+    (&["alt", "option"], Key::Alt),
+    (&["meta", "cmd", "command", "win", "super"], Key::Meta),
+    (&["enter", "return"], Key::Return),
+    (&["tab"], Key::Tab),
+    (&["space"], Key::Space),
+    (&["backspace"], Key::Backspace),
+    (&["delete"], Key::Delete),
+    (&["escape", "esc"], Key::Escape),
+    (&["up"], Key::UpArrow),
+    (&["down"], Key::DownArrow),
+    (&["left"], Key::LeftArrow),
+    (&["right"], Key::RightArrow),
+    (&["home"], Key::Home),
+    (&["end"], Key::End),
+    (&["pageup", "page_up"], Key::PageUp),
+    (&["pagedown", "page_down"], Key::PageDown),
+    (&["f1"], Key::F1),
+    (&["f2"], Key::F2),
+    (&["f3"], Key::F3),
+    (&["f4"], Key::F4),
+    (&["f5"], Key::F5),
+    (&["f6"], Key::F6),
+    (&["f7"], Key::F7),
+    (&["f8"], Key::F8),
+    (&["f9"], Key::F9),
+    (&["f10"], Key::F10),
+    (&["f11"], Key::F11),
+    (&["f12"], Key::F12),
 ];
 
 /// All accepted key names, for diagnostics. Lazily computed.
@@ -150,11 +152,11 @@ pub fn parse_key(name: &str) -> Result<ParsedKey, BackendError> {
 }
 
 /// Validate and map a mouse button name.
-pub fn parse_button(name: &str) -> Result<enigo::Button, BackendError> {
+pub fn parse_button(name: &str) -> Result<Button, BackendError> {
     match name.trim().to_ascii_lowercase().as_str() {
-        "left" => Ok(enigo::Button::Left),
-        "right" => Ok(enigo::Button::Right),
-        "middle" => Ok(enigo::Button::Middle),
+        "left" => Ok(Button::Left),
+        "right" => Ok(Button::Right),
+        "middle" => Ok(Button::Middle),
         _ => Err(BackendError::new(
             "invalid_button",
             format!("unknown button name: {name:?}; supported: left/right/middle"),
@@ -162,26 +164,27 @@ pub fn parse_button(name: &str) -> Result<enigo::Button, BackendError> {
     }
 }
 
-/// Validate a text payload for `enigo::Keyboard::text` (rejects NUL, which
-/// would truncate C-string based paths).
+/// Validate a text payload BEFORE any of it may be injected. Shared C0
+/// policy (used by action preflight AND the backend injection boundary):
+/// NUL, every other C0 control (U+0000–U+001F) and DEL (U+007F) are
+/// rejected EXCEPT TAB (`\t`), LF (`\n`) and CR (`\r`), which the text path
+/// maps to real Tab/Return clicks. Other control keys must go through key
+/// actions; text is never clipboard, so there is no fallback path for
+/// unmapped characters.
 pub fn validate_text(text: &str) -> Result<(), BackendError> {
-    if text.contains('\0') {
-        return Err(BackendError::new(
-            "invalid_text",
-            "text contains a NUL character",
-        ));
+    for ch in text.chars() {
+        let c = ch as u32;
+        if (c < 0x20 && !matches!(ch, '\t' | '\n' | '\r')) || c == 0x7F {
+            return Err(BackendError::new(
+                "invalid_text",
+                format!(
+                    "text contains control character U+{c:04X}; only TAB/LF/CR are \
+                     accepted in text (use key actions for other control keys)"
+                ),
+            ));
+        }
     }
     Ok(())
-}
-
-/// Map a contract [`Direction`] to an enigo direction for press/release.
-/// (Never `Click`: press and release must stay individually observable so
-/// held-state tracking and `release_all` stay correct.)
-pub fn enigo_direction(d: Direction) -> enigo::Direction {
-    match d {
-        Direction::Press => enigo::Direction::Press,
-        Direction::Release => enigo::Direction::Release,
-    }
 }
 
 #[cfg(test)]
@@ -195,8 +198,8 @@ mod tests {
         ] {
             assert!(parse_key(name).is_ok(), "should accept {name}");
         }
-        assert_eq!(parse_key("ctrl").unwrap().enigo_key(), enigo::Key::Control);
-        assert_eq!(parse_key("OPTION").unwrap().enigo_key(), enigo::Key::Alt);
+        assert_eq!(parse_key("ctrl").unwrap().key(), Key::Control);
+        assert_eq!(parse_key("OPTION").unwrap().key(), Key::Alt);
     }
 
     #[test]
@@ -233,8 +236,8 @@ mod tests {
         ] {
             assert!(parse_key(name).is_ok(), "should accept {name}");
         }
-        assert_eq!(parse_key("esc").unwrap().enigo_key(), enigo::Key::Escape);
-        assert_eq!(parse_key("F12").unwrap().enigo_key(), enigo::Key::F12);
+        assert_eq!(parse_key("esc").unwrap().key(), Key::Escape);
+        assert_eq!(parse_key("F12").unwrap().key(), Key::F12);
     }
 
     #[test]
@@ -263,9 +266,9 @@ mod tests {
 
     #[test]
     fn buttons_validate() {
-        assert_eq!(parse_button("left").unwrap(), enigo::Button::Left);
-        assert_eq!(parse_button("Right").unwrap(), enigo::Button::Right);
-        assert_eq!(parse_button("MIDDLE").unwrap(), enigo::Button::Middle);
+        assert_eq!(parse_button("left").unwrap(), Button::Left);
+        assert_eq!(parse_button("Right").unwrap(), Button::Right);
+        assert_eq!(parse_button("MIDDLE").unwrap(), Button::Middle);
         let err = parse_button("x1").unwrap_err();
         assert_eq!(err.code, "invalid_button");
         let err = parse_button("").unwrap_err();
@@ -273,9 +276,20 @@ mod tests {
     }
 
     #[test]
-    fn text_validation_rejects_nul() {
+    fn text_validation_rejects_c0_and_del_but_keeps_crlf_tab() {
+        // Ordinary Unicode is fine.
         assert!(validate_text("hello 世界").is_ok());
-        let err = validate_text("a\0b").unwrap_err();
+        // Allowed controls: the three that map to real key clicks.
+        assert!(validate_text("a\tb\nc\rd").is_ok());
+        // NUL and every other C0 control is rejected...
+        for bad in [
+            "a\0b", "\u{1}", "\u{7}", "a\u{8}b", "a\u{b}b", "a\u{c}b", "a\u{1b}b", "a\u{1f}b",
+        ] {
+            let err = validate_text(bad).unwrap_err();
+            assert_eq!(err.code, "invalid_text", "for {bad:?}");
+        }
+        // ...and DEL too.
+        let err = validate_text("a\u{7f}b").unwrap_err();
         assert_eq!(err.code, "invalid_text");
     }
 

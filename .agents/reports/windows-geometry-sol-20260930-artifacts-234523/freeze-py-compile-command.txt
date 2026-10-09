@@ -1,0 +1,1 @@
+PYTHONPYCACHEPREFIX=/tmp/windows-geometry-sol-20260930-phu9roqa/pycache-freeze python3 -m py_compile scripts/analyze-geometry-gui.py tests/geometry_gui_analyzer.py

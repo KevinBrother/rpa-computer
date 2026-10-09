@@ -1,0 +1,6 @@
+Real Windows native text-editor Unicode editing test. Only computer_* MCP tools, screenshot-driven actions. No shell, Run dialog commands, browser, APIs, source code, reading existing files or saving files.
+1. computer_open max_width=960,max_height=540 then observe. Use Windows Start/search GUI to find and launch Notepad by its visible app result. Do not run commands. Create a new blank document, never edit any existing user text. If you cannot get a clearly new empty document, close the session and report blocked.
+2. Use text_input to type two lines of your own choosing, including Chinese text and at least one emoji. Observe and verify both lines, correct at most once if necessary using real key_chord/text_input.
+3. Append a third line that states the total number of lines INCLUDING that new line. Observe and report the exact visible content and any rendering uncertainty. Do not claim emoji correct if it is a square/missing glyph.
+4. Close ONLY your new unsaved document/window and choose Don't Save if prompted. If modern Notepad retains tabs, discard only the test tab you created. Never discard a pre-existing user document. computer_close.
+Each step must reference the latest observation_id, unique request_id, correct image coordinate space. Do not invent visual success; report actual screenshots and failures. Bound to 30 turns.

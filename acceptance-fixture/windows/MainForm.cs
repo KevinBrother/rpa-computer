@@ -4,9 +4,19 @@
 //  No network, no file access except the optional coordinator-owned evidence file.
 //
 //  Usage: acceptance-fixture.exe [--seed N] [--evidence-file PATH]
+//                                [--suite legacy|baseline|punctuation|emoji|known-input|multiclick|drag|scroll|pointer|keyboard|focus]
+//                                [--self-test | --export-cases PATH | --export-platform-cases PATH | --export-focus-cases PATH]
+//  Windows builds include NativeText*.cs by default: known-09 uses an explicit
+//  native expected policy; --export-native-text-policy PATH exports it separately.
+//  The historical canonical case catalog and --export-cases remain unchanged.
+//  Omitting --suite keeps the historical legacy single-sample behavior; legacy
+//  results must never be merged with layered-suite results.
+//  --self-test / --export-cases are console modes: no window is created; the
+//  exit code is authoritative (stdout only appears when redirected, e.g. ssh).
 //
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
@@ -51,6 +61,7 @@ namespace AcceptanceFixture
     sealed class EvidenceLogger
     {
         private readonly string _path;
+        private readonly string _runID=Guid.NewGuid().ToString(), _sessionID=Guid.NewGuid().ToString();
         private EvidenceLogger(string path) { _path = path; }
 
         public static EvidenceLogger Create(string path)
@@ -76,7 +87,8 @@ namespace AcceptanceFixture
         private static string Pair(string k, object v)
         {
             if (v is bool) return "\"" + k + "\":" + (((bool)v) ? "true" : "false");
-            if (v is int || v is long || v is ulong) return "\"" + k + "\":" + v.ToString();
+            if (v is int || v is long || v is ulong || v is uint || v is double || v is float)
+                return "\"" + k + "\":" + Convert.ToString(v, CultureInfo.InvariantCulture);
             return "\"" + k + "\":\"" + Escape(Convert.ToString(v)) + "\"";
         }
 
@@ -85,6 +97,7 @@ namespace AcceptanceFixture
             var sb = new StringBuilder();
             sb.Append("{\"type\":\"").Append(Escape(type))
               .Append("\",\"ts\":\"").Append(DateTime.UtcNow.ToString("o")).Append("\"");
+            sb.Append(',').Append(Pair("run_id", _runID)).Append(',').Append(Pair("session_id", _sessionID));
             for (int i = 0; i + 1 < kvPairs.Length; i += 2)
                 sb.Append(',').Append(Pair(Convert.ToString(kvPairs[i]), kvPairs[i + 1]));
             sb.Append('}');
@@ -190,44 +203,52 @@ namespace AcceptanceFixture
 
     sealed class MainForm : Form
     {
-        private const string SampleText = "computer-use 你好 10×20";
         private const string NonceChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         private const string WindowTitle = "Computer Use Acceptance";
 
         private readonly SplitMix64 _rng;
         private readonly ulong _seedUsed;
         private readonly EvidenceLogger _logger;
+        private readonly SuiteKind _suite;
+        private readonly FixtureCase[] _suiteCases;
 
         private readonly Label _trialLabel;
         private readonly Label _nonceLabel;
         private readonly Label _statusLabel;
         private readonly Label _resultLabel;
+        private readonly Label _sampleLabel;
         private readonly TextBox _textBox;
         private readonly ShapesPanel _shapes;
 
-        private int _trialIndex;
+        private int _trialIndex;          // 1-based; in suite mode == case index
+        private FixtureCase _currentCase;
+        private int _nativeTextCheckIndex;
+        private bool _suiteFinished;
         private Item[] _items = new Item[0];
         private int _targetSlot;
         private string _nonce = "";
 
-        public MainForm(string evidencePath, ulong? seed)
+        public MainForm(SuiteKind suite, string evidencePath, ulong? seed)
         {
             _seedUsed = seed ?? (ulong)DateTime.UtcNow.Ticks;
             _rng = new SplitMix64(_seedUsed);
             _logger = EvidenceLogger.Create(evidencePath);
+            _suite = suite;
+            _suiteCases = CaseCatalog.CasesFor(suite);
 
             // --- form ---
             Text = WindowTitle;
+            Text += " — Windows native text policy v1";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
-            ClientSize = new Size(884, 622); // 900x650 incl. borders
+            ClientSize = new Size(884, 712); // ~900x750 incl. borders; fits a 1080 screen
             BackColor = Color.White;
 
             // --- controls ---
             _trialLabel = new Label
             {
-                Bounds = new Rectangle(20, 8, 300, 28),
+                Bounds = new Rectangle(20, 8, 500, 28),
                 Font = new Font(FontFamily.GenericSansSerif, 16f, FontStyle.Bold),
                 TextAlign = ContentAlignment.MiddleLeft
             };
@@ -251,44 +272,59 @@ namespace AcceptanceFixture
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = Color.White
             };
-            _shapes = new ShapesPanel { Bounds = new Rectangle(20, 168, 844, 230) };
+            _shapes = new ShapesPanel { Bounds = new Rectangle(20, 168, 844, 196) };
             _shapes.SlotClicked += ShapeClicked;
-            var sample = new Label
+            // Large wrapping sample; emoji suite uses Segoe UI Emoji at a bigger
+            // size to avoid ugly fallback (monochrome rendering is possible and
+            // must be reported honestly — see README).
+            _sampleLabel = new Label
             {
-                Bounds = new Rectangle(20, 402, 844, 24),
-                Font = new Font(FontFamily.GenericSansSerif, 13f),
-                Text = "Type exactly:  " + SampleText
+                Bounds = new Rectangle(20, 370, 844, 142),
+                Font = suite == SuiteKind.Emoji
+                    ? new Font("Segoe UI Emoji", 32f)
+                    : new Font(FontFamily.GenericSansSerif, 24f),
+                TextAlign = ContentAlignment.TopLeft
             };
             _textBox = new TextBox
             {
-                Bounds = new Rectangle(20, 430, 844, 110),
+                Bounds = new Rectangle(20, 518, 844, 120),
                 Multiline = true,
                 ScrollBars = ScrollBars.Vertical,
+                // The agent must reproduce the payload byte-for-byte: Tab must
+                // insert a tab (not move focus) and Enter a newline. Comparison
+                // stays strict UTF-16 — actual text is logged as-is, never
+                // normalized.
+                AcceptsTab = true,
+                AcceptsReturn = true,
                 Font = new Font(FontFamily.GenericSansSerif, 13f)
             };
             _resultLabel = new Label
             {
-                Bounds = new Rectangle(20, 552, 330, 38),
+                Bounds = new Rectangle(20, 646, 330, 38),
                 Font = new Font(FontFamily.GenericSansSerif, 11f, FontStyle.Bold),
                 TextAlign = ContentAlignment.MiddleLeft
             };
-            var checkBtn = new Button { Bounds = new Rectangle(360, 550, 160, 42), Text = "Check text" };
-            var nextBtn = new Button { Bounds = new Rectangle(540, 550, 160, 42), Text = "Next trial" };
-            var closeBtn = new Button { Bounds = new Rectangle(720, 550, 160, 42), Text = "Cancel / Close" };
+            var checkBtn = new Button { Bounds = new Rectangle(360, 644, 160, 42), Text = "Check text" };
+            var nextBtn = new Button { Bounds = new Rectangle(540, 644, 160, 42), Text = "Next trial" };
+            var closeBtn = new Button { Bounds = new Rectangle(720, 644, 160, 42), Text = "Cancel / Close" };
             foreach (var b in new[] { checkBtn, nextBtn, closeBtn })
                 b.Font = new Font(FontFamily.GenericSansSerif, 11f, FontStyle.Bold);
             checkBtn.Click += (s, e) => CheckText();
-            nextBtn.Click += (s, e) => StartTrial();
+            nextBtn.Click += (s, e) => NextTrial();
             closeBtn.Click += (s, e) => Close();
 
             Controls.AddRange(new Control[]
             {
-                _trialLabel, _nonceLabel, instr, _statusLabel, _shapes, sample, _textBox,
+                _trialLabel, _nonceLabel, instr, _statusLabel, _shapes, _sampleLabel, _textBox,
                 _resultLabel, checkBtn, nextBtn, closeBtn
             });
 
             if (_logger != null)
-                _logger.Log("session", "seed", _seedUsed.ToString(), "platform", "windows");
+                _logger.Log("session", "seed", _seedUsed.ToString(), "platform", "windows",
+                            "suite", SuiteNames.Name(_suite)
+                            , "native_text_policy_version", NativeTextPolicy.Version,
+                            "native_control", NativeTextPolicy.Control
+                            );
         }
 
         // MARK: Trial logic
@@ -300,11 +336,8 @@ namespace AcceptanceFixture
             return sb.ToString();
         }
 
-        public void StartTrial()
+        private void DrawShapes()
         {
-            _trialIndex++;
-            _nonce = MakeNonce();
-
             var items = new Item[4];
             items[0] = new Item { Kind = ShapeKind.Circle, Color = Palette.Green, ColorName = "green", IsTarget = true };
             var shapes = new[] { ShapeKind.Square, ShapeKind.Triangle, ShapeKind.Diamond };
@@ -321,21 +354,79 @@ namespace AcceptanceFixture
             _rng.Shuffle(items);
             _items = items;
             _targetSlot = Array.FindIndex(items, it => it.IsTarget);
-
-            _trialLabel.Text = "Trial " + _trialIndex;
-            _nonceLabel.Text = "NONCE: " + _nonce;
-            _statusLabel.Text = "";
-            _statusLabel.BackColor = Color.White;
-            _resultLabel.Text = "";
-            _textBox.Text = "";
             _shapes.Items = _items;
             _shapes.Invalidate();
+        }
+
+        public void StartTrial()
+        {
+            if (_suite != SuiteKind.Legacy && _suiteFinished)
+            {
+                // Next beyond the last case: no new case; keep SUITE COMPLETE shown.
+                return;
+            }
+            _trialIndex++;
+            _nativeTextCheckIndex = 0;
+            _nonce = MakeNonce();
+            DrawShapes();
+
+            if (_suite == SuiteKind.Legacy)
+            {
+                _currentCase = _suiteCases[0];
+                _trialLabel.Text = "Trial " + _trialIndex;
+            }
+            else
+            {
+                _currentCase = _suiteCases[_trialIndex - 1];
+                _trialLabel.Text = "Trial " + _trialIndex + "/" + _suiteCases.Length
+                    + " — suite: " + SuiteNames.Name(_suite);
+            }
+
+            _nonceLabel.Text = "NONCE: " + _nonce;
+            _statusLabel.Text = "";
+            _statusLabel.ForeColor = Color.Black;
+            _statusLabel.BackColor = Color.White;
+            _resultLabel.Text = "";
+            _sampleLabel.Text = _currentCase != null ? "Type exactly:  " + _currentCase.Payload : "";
+            _textBox.Text = "";
 
             string layout = string.Join(",", _items.Select((it, i) =>
                 i + ":" + it.ColorName + "-" + it.Kind.ToString().ToLowerInvariant()));
             if (_logger != null)
                 _logger.Log("trial", "trial", _trialIndex, "nonce", _nonce,
-                            "target", "green circle", "target_slot", _targetSlot, "layout", layout);
+                            "target", "green circle", "target_slot", _targetSlot, "layout", layout,
+                            "suite", SuiteNames.Name(_suite),
+                            "case_id", _currentCase != null ? _currentCase.Id : "",
+                            "case_index", _trialIndex,
+                            "case_total", _suite == SuiteKind.Legacy ? 0 : _suiteCases.Length,
+                            "expected_text", TextExpected()
+                            , "platform", "windows", "native_text_policy_version", NativeTextPolicy.Version,
+                            "native_control", NativeTextPolicy.Control,
+                            "native_override_applied", NativeTextPolicy.Applies(_suite, _currentCase),
+                            "task_payload", _currentCase.Payload,
+                            "canonical_expected_text", _currentCase.ExpectedText,
+                            "canonical_expected_utf16_hex", CaseContract.Utf16Hex(_currentCase.ExpectedText),
+                            "native_expected_text", TextExpected(),
+                            "native_expected_utf16_hex", CaseContract.Utf16Hex(TextExpected()),
+                            "actual_normalized", false
+                            );
+        }
+
+        private void NextTrial()
+        {
+            if (_suite != SuiteKind.Legacy && !_suiteFinished && _trialIndex >= _suiteCases.Length)
+            {
+                _suiteFinished = true;
+                _statusLabel.Text = "SUITE COMPLETE — " + _suiteCases.Length + "/" + _suiteCases.Length + " cases";
+                _statusLabel.ForeColor = Palette.Green;
+                _statusLabel.BackColor = Color.FromArgb(209, 245, 209);
+                if (_logger != null)
+                    _logger.Log("suite_complete", "trial", _trialIndex, "suite", SuiteNames.Name(_suite),
+                                "case_id", _currentCase != null ? _currentCase.Id : "",
+                                "case_index", _trialIndex, "case_total", _suiteCases.Length);
+                return;
+            }
+            StartTrial();
         }
 
         private void ShapeClicked(int slot)
@@ -346,16 +437,30 @@ namespace AcceptanceFixture
             _statusLabel.BackColor = hit ? Color.FromArgb(209, 245, 209) : Color.FromArgb(252, 214, 214);
             if (_logger != null)
                 _logger.Log(hit ? "hit" : "wrong", "trial", _trialIndex, "nonce", _nonce,
-                            "slot", slot, "target_slot", _targetSlot);
+                            "slot", slot, "target_slot", _targetSlot,
+                            "suite", SuiteNames.Name(_suite),
+                            "case_id", _currentCase != null ? _currentCase.Id : "",
+                            "case_index", _trialIndex,
+                            "case_total", _suite == SuiteKind.Legacy ? 0 : _suiteCases.Length);
         }
 
         private static int GraphemeCount(string s) { return new StringInfo(s).LengthInTextElements; }
 
+        private string TextExpected()
+        {
+            return NativeTextPolicy.Expected(_suite, _currentCase);
+        }
+
         private void CheckText()
         {
-            string got = _textBox.Text;
-            bool matched = got == SampleText;
-            int expected = GraphemeCount(SampleText);
+            string got = _textBox.Text; // Never rewrite/normalize the actual control value.
+            string expected = TextExpected();
+            _nativeTextCheckIndex++;
+            // Exact UTF-16 code-unit comparison — no Trim, no Unicode normalization.
+            bool matched = CaseContract.Utf16ExactMatch(got, expected);
+            string expectedUtf16Hex = CaseContract.Utf16Hex(expected);
+            string utf16Hex = CaseContract.Utf16Hex(got);
+            int expectedLen = GraphemeCount(expected); // grapheme count, informational
             int gotLen = GraphemeCount(got);
             if (matched)
             {
@@ -364,12 +469,32 @@ namespace AcceptanceFixture
             }
             else
             {
-                _resultLabel.Text = "MISMATCH — expected " + expected + ", got " + gotLen;
+                _resultLabel.Text = "MISMATCH — expected " + expectedLen + ", got " + gotLen;
                 _resultLabel.ForeColor = Palette.Red;
             }
             if (_logger != null)
                 _logger.Log("text_check", "trial", _trialIndex, "nonce", _nonce,
-                            "matched", matched, "expected_len", expected, "got_len", gotLen);
+                            "matched", matched, "expected_len", expectedLen, "got_len", gotLen,
+                            "suite", SuiteNames.Name(_suite),
+                            "case_id", _currentCase != null ? _currentCase.Id : "",
+                            "case_index", _trialIndex,
+                            "case_total", _suite == SuiteKind.Legacy ? 0 : _suiteCases.Length,
+                            "task_payload", _currentCase != null ? _currentCase.Payload : "",
+                            "expected_text", expected,
+                            "actual_text", got,
+                            "expected_utf16_hex", expectedUtf16Hex,
+                            "actual_utf16_hex", utf16Hex
+                            , "platform", "windows", "native_text_policy_version", NativeTextPolicy.Version,
+                            "native_control", NativeTextPolicy.Control,
+                            "native_override_applied", NativeTextPolicy.Applies(_suite, _currentCase),
+                            "canonical_expected_text", _currentCase.ExpectedText,
+                            "canonical_expected_utf16_hex", CaseContract.Utf16Hex(_currentCase.ExpectedText),
+                            "native_expected_text", expected,
+                            "native_expected_utf16_hex", expectedUtf16Hex,
+                            "actual_normalized", false,
+                            "check_index", _nativeTextCheckIndex,
+                            "check_kind", _nativeTextCheckIndex == 1 ? "first" : "final"
+                            );
         }
     }
 
@@ -377,26 +502,110 @@ namespace AcceptanceFixture
 
     internal static class Program
     {
-        [STAThread]
-        static void Main(string[] args)
+        private static int Fail(string msg)
         {
-            ulong? seed = null;
-            string evidencePath = null;
-            for (int i = 0; i < args.Length; i++)
+            Console.Error.WriteLine("error: " + msg);
+            return 1;
+        }
+
+        [STAThread]
+        static int Main(string[] args)
+        {
+            // Separate native policy manifest; legacy63/platform20/focus10 exports stay unchanged.
+            // This branch precedes any WinForms initialization and refuses existing output files.
+            if (args.Length > 0 && args[0] == "--export-native-text-policy")
             {
-                string a = args[i];
-                if (a == "--seed" && i + 1 < args.Length) { seed = ulong.Parse(args[i + 1]); i++; }
-                else if (a == "--evidence-file" && i + 1 < args.Length) { evidencePath = args[i + 1]; i++; }
-                else if (a.StartsWith("--seed=")) seed = ulong.Parse(a.Substring(7));
-                else if (a.StartsWith("--evidence-file=")) evidencePath = a.Substring(16);
+                try {
+                    string path = NativeTextPolicy.ParseExport(args);
+                    using (var writer = new StreamWriter(new FileStream(path, FileMode.CreateNew, FileAccess.Write), new UTF8Encoding(false)))
+                        writer.Write(NativeTextPolicy.ManifestJson());
+                    Console.WriteLine("exported Windows native text policy: " + path);
+                    return 0;
+                } catch (ArgumentException ex) { return Fail(ex.Message); }
+                  catch (IOException ex) { return Fail(ex.Message); }
+            }
+            BasicArguments parsed;
+            try { parsed = BasicArguments.Parse(args); }
+            catch (ArgumentException ex) { return Fail(ex.Message); }
+            ulong? seed = parsed.Seed;
+            string evidencePath = parsed.EvidencePath, suiteName = parsed.Suite;
+            bool selfTest = parsed.SelfTest;
+            string exportPath = parsed.ExportPath;
+            SuiteKind suite = SuiteKind.Legacy;
+            SuiteNames.TryParse(suiteName, out suite);
+
+            if (selfTest)
+            {
+                var results = SelfTest.Run();
+                results.AddRange(GestureSelfTest.Run());
+                results.AddRange(BasicSelfTest.Run());
+                results.AddRange(FocusSelfTest.Run());
+                results.AddRange(FocusRegression.Run());
+                results.AddRange(NativeTextSelfTest.Run());
+                results.AddRange(GeometrySelfTest.Run());
+                results.AddRange(GeometryRegression.Run());
+                int failed = 0;
+                foreach (var r in results)
+                {
+                    Console.WriteLine((r.Passed ? "PASS" : "FAIL") + ": " + r.Name
+                        + (r.Detail.Length > 0 ? " — " + r.Detail : ""));
+                    if (!r.Passed) failed++;
+                }
+                Console.WriteLine(failed == 0
+                    ? "SELF-TEST PASSED (" + results.Count + " checks)"
+                    : "SELF-TEST FAILED (" + failed + "/" + results.Count + " checks failed)");
+                return failed == 0 ? 0 : 1;
             }
 
+            if (exportPath != null)
+            {
+                File.WriteAllText(exportPath, GestureExporter.ManifestJson(), new UTF8Encoding(false));
+                Console.WriteLine("exported case manifest: " + exportPath);
+                Console.WriteLine("WARNING: coordinator-only file (contains answers). Must NOT be placed in the GUI agent publish directory.");
+                return 0;
+            }
+
+            if (parsed.PlatformExportPath != null)
+            {
+                File.WriteAllText(parsed.PlatformExportPath, BasicCatalog.ManifestJson(), new UTF8Encoding(false));
+                Console.WriteLine("exported Windows-only B2 manifest (coordinator only): " + parsed.PlatformExportPath);
+                return 0;
+            }
+
+            if (parsed.FocusExportPath != null)
+            {
+                File.WriteAllText(parsed.FocusExportPath, FocusCatalog.ManifestJson(), new UTF8Encoding(false));
+                Console.WriteLine("exported Windows-only focus manifest (coordinator only): " + parsed.FocusExportPath);
+                return 0;
+            }
+
+            if (parsed.GeometryExportPath != null)
+            {
+                try {
+                    using (var writer = new StreamWriter(new FileStream(parsed.GeometryExportPath, FileMode.CreateNew, FileAccess.Write), new UTF8Encoding(false)))
+                        writer.Write(GeometryCatalog.ManifestJson());
+                    Console.WriteLine("exported Windows-only geometry manifest (coordinator only): " + parsed.GeometryExportPath);
+                    return 0;
+                } catch (IOException ex) { return Fail(ex.Message); }
+            }
+
+            if (suiteName == "geometry") GeometryNative.EnableOwnThreadDpi();
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            var form = new MainForm(evidencePath, seed);
-            // first trial starts when the form is shown
-            form.Shown += (s, e) => ((MainForm)s).StartTrial();
-            Application.Run(form);
+            if (suiteName == "geometry") {
+                Application.Run(new GeometryForm(evidencePath));
+            } else if (suiteName == "focus") {
+                Application.Run(new FocusForm(evidencePath));
+            } else if (BasicCatalog.IsBasic(suiteName)) {
+                Application.Run(new BasicForm(suiteName, seed, evidencePath));
+            } else if (GestureCatalog.IsGesture(suiteName)) {
+                Application.Run(new GestureForm(suiteName, seed, evidencePath));
+            } else {
+                var form = new MainForm(suite, evidencePath, seed);
+                form.Shown += (s, e) => ((MainForm)s).StartTrial();
+                Application.Run(form);
+            }
+            return 0;
         }
     }
 }

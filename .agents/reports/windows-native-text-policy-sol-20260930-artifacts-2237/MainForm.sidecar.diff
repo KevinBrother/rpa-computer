@@ -1,0 +1,156 @@
+--- MainForm.focus-frozen.cs
++++ MainForm.native-text-sidecar.cs
+@@ -6,6 +6,9 @@
+ //  Usage: acceptance-fixture.exe [--seed N] [--evidence-file PATH]
+ //                                [--suite legacy|baseline|punctuation|emoji|known-input|multiclick|drag|scroll|pointer|keyboard|focus]
+ //                                [--self-test | --export-cases PATH | --export-platform-cases PATH | --export-focus-cases PATH]
++//  Sidecar build only: /define:WINDOWS_NATIVE_TEXT_POLICY_V1 plus NativeText*.cs
++//  enables --export-native-text-policy PATH and explicit Windows known-09 expected.
++//  Without that build flag the historical canonical checker remains unchanged.
+ //  Omitting --suite keeps the historical legacy single-sample behavior; legacy
+ //  results must never be merged with layered-suite results.
+ //  --self-test / --export-cases are console modes: no window is created; the
+@@ -219,6 +222,9 @@
+ 
+         private int _trialIndex;          // 1-based; in suite mode == case index
+         private FixtureCase _currentCase;
++#if WINDOWS_NATIVE_TEXT_POLICY_V1
++        private int _nativeTextCheckIndex;
++#endif
+         private bool _suiteFinished;
+         private Item[] _items = new Item[0];
+         private int _targetSlot;
+@@ -234,6 +240,9 @@
+ 
+             // --- form ---
+             Text = WindowTitle;
++#if WINDOWS_NATIVE_TEXT_POLICY_V1
++            Text += " — Windows native text policy v1";
++#endif
+             StartPosition = FormStartPosition.CenterScreen;
+             FormBorderStyle = FormBorderStyle.FixedSingle;
+             MaximizeBox = false;
+@@ -316,7 +325,12 @@
+ 
+             if (_logger != null)
+                 _logger.Log("session", "seed", _seedUsed.ToString(), "platform", "windows",
+-                            "suite", SuiteNames.Name(_suite));
++                            "suite", SuiteNames.Name(_suite)
++#if WINDOWS_NATIVE_TEXT_POLICY_V1
++                            , "native_text_policy_version", NativeTextPolicy.Version,
++                            "native_control", NativeTextPolicy.Control
++#endif
++                            );
+         }
+ 
+         // MARK: Trial logic
+@@ -358,6 +372,9 @@
+                 return;
+             }
+             _trialIndex++;
++#if WINDOWS_NATIVE_TEXT_POLICY_V1
++            _nativeTextCheckIndex = 0;
++#endif
+             _nonce = MakeNonce();
+             DrawShapes();
+ 
+@@ -390,7 +407,19 @@
+                             "case_id", _currentCase != null ? _currentCase.Id : "",
+                             "case_index", _trialIndex,
+                             "case_total", _suite == SuiteKind.Legacy ? 0 : _suiteCases.Length,
+-                            "expected_text", _currentCase != null ? _currentCase.ExpectedText : "");
++                            "expected_text", TextExpected()
++#if WINDOWS_NATIVE_TEXT_POLICY_V1
++                            , "platform", "windows", "native_text_policy_version", NativeTextPolicy.Version,
++                            "native_control", NativeTextPolicy.Control,
++                            "native_override_applied", NativeTextPolicy.Applies(_suite, _currentCase),
++                            "task_payload", _currentCase.Payload,
++                            "canonical_expected_text", _currentCase.ExpectedText,
++                            "canonical_expected_utf16_hex", CaseContract.Utf16Hex(_currentCase.ExpectedText),
++                            "native_expected_text", TextExpected(),
++                            "native_expected_utf16_hex", CaseContract.Utf16Hex(TextExpected()),
++                            "actual_normalized", false
++#endif
++                            );
+         }
+ 
+         private void NextTrial()
+@@ -427,10 +456,22 @@
+ 
+         private static int GraphemeCount(string s) { return new StringInfo(s).LengthInTextElements; }
+ 
++        private string TextExpected()
++        {
++#if WINDOWS_NATIVE_TEXT_POLICY_V1
++            return NativeTextPolicy.Expected(_suite, _currentCase);
++#else
++            return _currentCase != null ? _currentCase.ExpectedText : "";
++#endif
++        }
++
+         private void CheckText()
+         {
+-            string got = _textBox.Text;
+-            string expected = _currentCase != null ? _currentCase.ExpectedText : "";
++            string got = _textBox.Text; // Never rewrite/normalize the actual control value.
++            string expected = TextExpected();
++#if WINDOWS_NATIVE_TEXT_POLICY_V1
++            _nativeTextCheckIndex++;
++#endif
+             // Exact UTF-16 code-unit comparison — no Trim, no Unicode normalization.
+             bool matched = CaseContract.Utf16ExactMatch(got, expected);
+             string expectedUtf16Hex = CaseContract.Utf16Hex(expected);
+@@ -458,7 +499,20 @@
+                             "expected_text", expected,
+                             "actual_text", got,
+                             "expected_utf16_hex", expectedUtf16Hex,
+-                            "actual_utf16_hex", utf16Hex);
++                            "actual_utf16_hex", utf16Hex
++#if WINDOWS_NATIVE_TEXT_POLICY_V1
++                            , "platform", "windows", "native_text_policy_version", NativeTextPolicy.Version,
++                            "native_control", NativeTextPolicy.Control,
++                            "native_override_applied", NativeTextPolicy.Applies(_suite, _currentCase),
++                            "canonical_expected_text", _currentCase.ExpectedText,
++                            "canonical_expected_utf16_hex", CaseContract.Utf16Hex(_currentCase.ExpectedText),
++                            "native_expected_text", expected,
++                            "native_expected_utf16_hex", expectedUtf16Hex,
++                            "actual_normalized", false,
++                            "check_index", _nativeTextCheckIndex,
++                            "check_kind", _nativeTextCheckIndex == 1 ? "first" : "final"
++#endif
++                            );
+         }
+     }
+ 
+@@ -475,6 +529,21 @@
+         [STAThread]
+         static int Main(string[] args)
+         {
++#if WINDOWS_NATIVE_TEXT_POLICY_V1
++            // Separate opt-in policy manifest; legacy63/platform20/focus10 exports stay unchanged.
++            // This branch precedes any WinForms initialization and refuses existing output files.
++            if (args.Length > 0 && args[0] == "--export-native-text-policy")
++            {
++                try {
++                    string path = NativeTextPolicy.ParseExport(args);
++                    using (var writer = new StreamWriter(new FileStream(path, FileMode.CreateNew, FileAccess.Write), new UTF8Encoding(false)))
++                        writer.Write(NativeTextPolicy.ManifestJson());
++                    Console.WriteLine("exported Windows native text policy: " + path);
++                    return 0;
++                } catch (ArgumentException ex) { return Fail(ex.Message); }
++                  catch (IOException ex) { return Fail(ex.Message); }
++            }
++#endif
+             BasicArguments parsed;
+             try { parsed = BasicArguments.Parse(args); }
+             catch (ArgumentException ex) { return Fail(ex.Message); }
+@@ -492,6 +561,9 @@
+                 results.AddRange(BasicSelfTest.Run());
+                 results.AddRange(FocusSelfTest.Run());
+                 results.AddRange(FocusRegression.Run());
++#if WINDOWS_NATIVE_TEXT_POLICY_V1
++                results.AddRange(NativeTextSelfTest.Run());
++#endif
+                 int failed = 0;
+                 foreach (var r in results)
+                 {

@@ -1,0 +1,7 @@
+# Windows geometry StageA requirements RED — CC+GLM only
+
+Read `.agents/reports/windows-geometry-red-sol-20260930.md` after SOURCE_FROZEN. New tests expose missing geometry suite/export parser; current baseline237 must remain intact. Do not implement/fix product/test/buildsource yourself; noAgent/Task, noMac/Linux execution, noGUI/Host/capture/nativeinput/networklistener/globalchanges/worktree/commit. Protect Notepad24332. Real glm-5.3-flash useralias.
+
+New unique Windows TEMP, stage exact new complete source manifest+approved runner preserving layout; verify hashes local/remote. Plain default build-windows.ps1 with in-box Frameworkcsc, no define, separate newout; actual numericcsc exit0 required (compile failure is not intendedRED). --self-test only through frozen boundedrunner timeout120, evidencePARENTonly. Must record actual existing237 PASS retained and named new geometry requirementFAIL(s), nativeexit1. No hardcodedfalse/unrelatedexception accepted as usefulRED. Inspect code assertions and output to establish missingparser/export cause. No GUI initialization because selftest path exits before WinForms.
+
+First result preserved, no retry-for-green, no subsequentexports/GUI. Readonly exactowned residual, source hashrecheck then archive all summary/stdout/stderr/exit/identity/hash/wrappers and frozen source. Report `.agents/reports/windows-geometry-red-cc-20260930.md`, raw matchingruns; short count table and boundary. CLI success not feature success. Source changes only author after your terminal; stop after report.

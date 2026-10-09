@@ -14,6 +14,8 @@
 //! - `server`: transport-agnostic MCP service wiring reader/writer/worker.
 //! - `stdio`: stdio transport with signal/EOF/hotkey control paths.
 //! - `tcp`: loopback-only, token-first-line authenticated TCP transport.
+//! - `remote`: direct TLS client/host transport (token after handshake,
+//!   per-connection owned stdio child, single control client).
 //! - `lock`: cross-process OS-level desktop writer lock.
 //! - `hotkey`: native emergency-stop hotkey registration (best effort).
 //! - `backend_factory`: explicit backend construction (native vs test-only).
@@ -24,7 +26,10 @@ pub mod ingress;
 pub mod jsonrpc;
 pub mod lock;
 pub mod mock_backend;
+pub mod remote;
 pub mod server;
 pub mod stdio;
 pub mod tcp;
 pub mod worker;
+
+mod bounded_output;

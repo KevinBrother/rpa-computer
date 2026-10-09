@@ -1,0 +1,11 @@
+       0 evidence/remote-evidence/cli-dupkey-negative/stdout.log
+   24217 evidence/remote-evidence/cli-empty-summary/stdout.log
+   44731 evidence/remote-evidence/cli-plan/stdout.log
+       0 evidence/remote-evidence/original36/stdout.log
+       0 evidence/remote-evidence/stage-b25/stdout.log
+     122 evidence/remote-evidence/cli-dupkey-negative/stderr.log
+       0 evidence/remote-evidence/cli-empty-summary/stderr.log
+       0 evidence/remote-evidence/cli-plan/stderr.log
+    4486 evidence/remote-evidence/original36/stderr.log
+    3725 evidence/remote-evidence/stage-b25/stderr.log
+   77281 total

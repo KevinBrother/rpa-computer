@@ -1,0 +1,6 @@
+This is a real GUI acceptance task on a controlled Windows desktop. Only computer_* MCP tools are permitted. Never open a shell, browser, files, source code, or use app-specific APIs.
+1. computer_open(max_width=960,max_height=540) then observe. Read the visible Trial and complete NONCE and identify the target according to the rule printed in the Computer Use Acceptance window. If you cannot read it, close and stop honestly.
+2. Click the target using coordinates from that screenshot. Inspect the returned/new screenshot for TARGET HIT. Do not assume success from dispatched alone.
+3. Read the exact sample after "Type exactly:" in the window. Click the empty text box and use text_input to enter that sample exactly (Unicode matters). Click Check text, observe the visible status. If MISMATCH, inspect and correct at most once using GUI, report both attempts.
+4. Report the visible nonce, shapes, selected coordinates and final target/text statuses. computer_close. Do not click Next trial or Cancel/Close, do not close the fixture.
+For every step use the latest observation_id and geometry_version in based_on, as required by tool schema. Use unique request_id per action. No answers, coordinates, or sample text are supplied by this prompt; derive them from screenshots. Keep screenshots at 960x540 to bound context.

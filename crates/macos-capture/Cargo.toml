@@ -1,0 +1,19 @@
+[package]
+name = "rpa-macos-capture"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+description = "Fail-closed ScreenCaptureKit still capture excluding an exact owned renderer PID"
+
+# Intentionally independent: no root Cargo edit, no native-input / renderer dependency.
+[workspace]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "=0.6.4"
+block2 = "=0.6.2"
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSArray", "NSEnumerator", "NSError", "NSString", "NSProcessInfo", "NSThread"] }
+objc2-screen-capture-kit = { version = "=0.3.2", default-features = false, features = ["std", "SCError", "SCShareableContent", "SCStream", "SCScreenshotManager", "block2", "libc", "objc2-core-foundation", "objc2-core-graphics"] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGImage", "CGWindow", "objc2"] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFData", "CFString", "objc2"] }
+objc2-image-io = { version = "=0.3.2", default-features = false, features = ["std", "CGImageDestination", "objc2-core-graphics"] }

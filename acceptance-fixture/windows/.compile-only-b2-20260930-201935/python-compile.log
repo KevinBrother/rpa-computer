@@ -1,0 +1,4 @@
+  File "tests/basic_input_gui_analyzer.py", line 205
+    type="text",text=__import__('json').dumps(dict(session_id="mcp",observation_id=ident,surface_id="surface",geometry_version="g",width_px=w,height_px=h)))])]))))
+                                                                                                                                                                  ^
+SyntaxError: unmatched ')'

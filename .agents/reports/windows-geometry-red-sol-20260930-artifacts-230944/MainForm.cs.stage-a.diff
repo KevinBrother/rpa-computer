@@ -1,0 +1,10 @@
+--- acceptance-fixture/windows/MainForm.cs.native-text-frozen
++++ acceptance-fixture/windows/MainForm.cs.geometry-red
+@@ -542,6 +542,7 @@
+                 results.AddRange(FocusSelfTest.Run());
+                 results.AddRange(FocusRegression.Run());
+                 results.AddRange(NativeTextSelfTest.Run());
++                results.AddRange(GeometrySelfTest.Run());
+                 int failed = 0;
+                 foreach (var r in results)
+                 {

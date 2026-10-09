@@ -1,0 +1,2 @@
+acceptance-fixture/windows/BasicNative.cs(21,23): warning CS0649: Field `AcceptanceFixture.BasicPointer.MenuOpened' is never assigned to, and will always have its default value `null'
+Compilation succeeded - 1 warning(s)

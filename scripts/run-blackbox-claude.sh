@@ -103,11 +103,19 @@ fi
 # ---------------------------------------------------------------------------
 ALLOWED_COMPUTER_TOOLS="mcp__computer__computer_describe,mcp__computer__computer_open,mcp__computer__computer_observe,mcp__computer__computer_step,mcp__computer__computer_get_step,mcp__computer__computer_pause,mcp__computer__computer_resume,mcp__computer__computer_close"
 
+# Explicit model selection: the acceptance run must NEVER inherit the CLI's
+# default model (e.g. a Kimi default from the local CLI config). Pinned here
+# so both build_claude_args and the --verify-only harness assert the same
+# value (single source of truth).
+BLACKBOX_MODEL="sonnet"
+
 CLEAN_SYSTEM_PROMPT='You are a black-box acceptance-test agent driving a controlled test desktop ONLY through the computer_* MCP tools (screenshots, mouse, keyboard). Hard rules, any violation invalidates the run: (1) never open a terminal or run shell/AppleScript/PowerShell/CDP; (2) never read/write files or use a browser; (3) never open, view, or reference any source-code directory or project file on this machine; (4) every conclusion must come from screenshots you actually received — never from assumptions, memory, or mental arithmetic; (5) report failures honestly. When the task is complete or impossible, call computer_close and stop.'
 
 build_claude_args() {
   local mcp_config="$1" task_text="$2" mode="$3"
   CLAUDE_ARGS=(
+    # Explicit model pin: never inherit the CLI default model.
+    --model "$BLACKBOX_MODEL"
     # Disable ALL built-in tools; only the MCP computer tools remain.
     # (--allowedTools by itself is auto-approval, NOT isolation.)
     --tools ''
@@ -178,33 +186,50 @@ EOF
     grep -qxF "arg[$1]=$2" "$args_file" || { echo "VERIFY FAIL: missing $2 at position $1" >&2; fail=1; }
   }
   # Fixed prefix positions (keep in sync with build_claude_args).
-  need_fixed 0 "--tools"
-  need_fixed 1 ""
-  need_fixed 2 "--allowedTools"
-  need_fixed 3 "$ALLOWED_COMPUTER_TOOLS"
-  need_fixed 4 "--mcp-config"
-  need_fixed 6 "--strict-mcp-config"
-  need_fixed 7 "--disable-slash-commands"
-  need_fixed 8 "--settings"
-  need_fixed 9 '{"disableAllHooks":true}'
-  need_fixed 10 "--setting-sources"
-  need_fixed 11 "user"
-  need_fixed 12 "--system-prompt"
-  need_fixed 14 "--print"
-  need_fixed 15 "--output-format"
-  need_fixed 16 "stream-json"
-  need_fixed 17 "--verbose"
-  need_fixed 18 "--no-session-persistence"
-  need_fixed 19 "--max-turns"
-  need_fixed 21 "$TASK_TEXT"
+  need_fixed 0 "--model"
+  need_fixed 1 "$BLACKBOX_MODEL"
+  need_fixed 2 "--tools"
+  need_fixed 3 ""
+  need_fixed 4 "--allowedTools"
+  need_fixed 5 "$ALLOWED_COMPUTER_TOOLS"
+  need_fixed 6 "--mcp-config"
+  need_fixed 8 "--strict-mcp-config"
+  need_fixed 9 "--disable-slash-commands"
+  need_fixed 10 "--settings"
+  need_fixed 11 '{"disableAllHooks":true}'
+  need_fixed 12 "--setting-sources"
+  need_fixed 13 "user"
+  need_fixed 14 "--system-prompt"
+  need_fixed 16 "--print"
+  need_fixed 17 "--output-format"
+  need_fixed 18 "stream-json"
+  need_fixed 19 "--verbose"
+  need_fixed 20 "--no-session-persistence"
+  need_fixed 21 "--max-turns"
+  need_fixed 23 "$TASK_TEXT"
+  # The model flag must appear exactly once, paired with the pinned model.
+  if [ "$(grep -cxF 'arg[0]=--model' "$args_file")" -ne 1 ] || \
+     [ "$(grep -cxF "arg[1]=$BLACKBOX_MODEL" "$args_file")" -ne 1 ]; then
+    echo "VERIFY FAIL: --model $BLACKBOX_MODEL must appear exactly once at argv 0/1" >&2
+    fail=1
+  fi
   # Policy denials: no bypass flags anywhere in the argv.
   if grep -qE 'dangerously-skip-permissions|bypassPermissions|--permission-mode' "$args_file"; then
     echo "VERIFY FAIL: forbidden permission-bypass flag present" >&2; fail=1
   fi
-  # Interactive mode must ALSO carry the task text as final positional arg.
+  # Interactive mode must ALSO carry the task text as final positional arg,
+  # and must carry the same explicit model pin (never inherit the default).
   build_claude_args "$TMP/release/mcp/mcp.json" "$TASK_TEXT" "interactive"
   last="${CLAUDE_ARGS[$((${#CLAUDE_ARGS[@]}-1))]}"
   [ "$last" = "$TASK_TEXT" ] || { echo "VERIFY FAIL: interactive mode lacks task text" >&2; fail=1; }
+  interactive_model_ok=0
+  for ((i=0; i<${#CLAUDE_ARGS[@]}-1; i++)); do
+    if [ "${CLAUDE_ARGS[$i]}" = "--model" ] && [ "${CLAUDE_ARGS[$((i+1))]}" = "$BLACKBOX_MODEL" ]; then
+      interactive_model_ok=1
+      break
+    fi
+  done
+  [ "$interactive_model_ok" -eq 1 ] || { echo "VERIFY FAIL: interactive mode lacks --model $BLACKBOX_MODEL" >&2; fail=1; }
   for a in "${CLAUDE_ARGS[@]}"; do
     case "$a" in
       --print|--output-format|--no-session-persistence)

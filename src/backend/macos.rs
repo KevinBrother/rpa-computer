@@ -51,10 +51,12 @@ pub(crate) fn prepare_thread() -> Result<(), BackendError> {
     Ok(())
 }
 
-/// Create the input device. macOS requires the Accessibility grant; this
+/// Create the raw input driver. macOS requires the Accessibility grant; this
 /// preflights WITHOUT prompting and refuses to construct otherwise, so
 /// `DesktopBackend::new()` never silently claims input capability it lacks.
-pub(crate) fn create_enigo() -> Result<enigo::Enigo, BackendError> {
+/// The driver itself comes from `rpa_native_input::native_driver()` (the
+/// crate's macOS `Platform`, which performs the same trust check).
+pub(crate) fn create_driver() -> Result<Box<dyn rpa_native_input::Driver>, BackendError> {
     if !unsafe { AXIsProcessTrusted() } {
         return Err(BackendError::new(
             "permission_denied",
@@ -63,15 +65,9 @@ pub(crate) fn create_enigo() -> Result<enigo::Enigo, BackendError> {
              Accessibility and restart the process",
         ));
     }
-    let settings = enigo::Settings {
-        // Never open the system prompt from inside the backend; permission
-        // acquisition is an explicit user action.
-        open_prompt_to_get_permissions: false,
-        ..Default::default()
-    };
-    enigo::Enigo::new(&settings).map_err(|e| {
+    rpa_native_input::native_driver().map_err(|e| {
         BackendError::new(
-            "permission_denied",
+            e.code.to_owned(),
             format!("failed to create macOS input event source: {e}"),
         )
     })

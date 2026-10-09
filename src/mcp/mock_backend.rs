@@ -31,6 +31,7 @@ const MOCK_HEIGHT: u32 = 64;
 /// Deterministic, in-memory fake desktop. Not `Send`-restricted; the worker
 /// constructs and owns it on the native thread like any other backend.
 pub struct MockBackend {
+    display: crate::backend::display::single::SingleDisplay,
     injected: AtomicU64,
 }
 
@@ -38,6 +39,9 @@ impl MockBackend {
     pub fn new() -> Self {
         MockBackend {
             injected: AtomicU64::new(0),
+            display: crate::backend::display::single::SingleDisplay::new(
+                rpa_display_topology::NativeUnit::PhysicalPixels,
+            ),
         }
     }
 }
@@ -49,6 +53,20 @@ impl Default for MockBackend {
 }
 
 impl Backend for MockBackend {
+    fn display_snapshot(
+        &mut self,
+    ) -> Result<Option<rpa_display_topology::TopologySnapshot>, BackendError> {
+        let g = self.geometry()?;
+        self.display
+            .snapshot(
+                &g,
+                rpa_display_topology::PixelSize {
+                    width: MOCK_WIDTH,
+                    height: MOCK_HEIGHT,
+                },
+            )
+            .map(Some)
+    }
     fn platform(&self) -> &'static str {
         "mock"
     }

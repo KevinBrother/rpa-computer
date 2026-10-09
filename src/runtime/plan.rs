@@ -13,15 +13,16 @@ pub enum PlanEvent {
     Button {
         button: String,
         direction: Direction,
+        /// Native click-state of THIS press/up pair (1..=3).
+        click_count: u8,
     },
     Key {
         key: String,
         direction: Direction,
     },
-    /// One bounded chunk of text (see `chunk_text`). Text actions never
-    /// compile to a single multi-thousand-character event, so a native
-    /// text() call stays short and cancellation between events is honored.
-    Text(String),
+    /// One Unicode scalar for the native text path (see `compile_plan`'s
+    /// TextInput branch). Enter/Tab mapping happens in the backend.
+    TextScalar(char),
     Scroll {
         x: i32,
         y: i32,
@@ -30,26 +31,29 @@ pub enum PlanEvent {
     Sleep(u64),
 }
 
-/// Maximum characters handed to the backend in a single `Text` event. Small
-/// enough that one native text() call is brief and a pause/close lands
-/// within the cooperative-stop budget between events.
-pub const TEXT_CHUNK_CHARS: usize = 64;
+/// Interruptible pause (ms) between consecutive text scalars. This is the
+/// DEFAULT interval that keeps cancellation responsive between characters —
+/// a candidate, not a guarantee: the executor's cancellation check runs at
+/// event boundaries and the input-phase deadline still bounds the whole
+/// phase, so long texts can still be cut short and are reported partial
+/// truthfully.
+pub const TEXT_SCALAR_INTERVAL_MS: u64 = 1;
 
-/// Split text into bounded chunks on Unicode scalar boundaries. Order and
-/// content are preserved exactly (concatenating the chunks yields the input).
-pub fn chunk_text(text: &str, max_chars: usize) -> Vec<String> {
-    let mut chunks = Vec::new();
-    let mut current = String::new();
-    for ch in text.chars() {
-        current.push(ch);
-        if current.chars().count() >= max_chars {
-            chunks.push(std::mem::take(&mut current));
+/// Normalize CRLF (`"\r\n"`) to a single `'\n'` so one newline produces
+/// exactly ONE Return click downstream. Lone `'\n'` and lone `'\r'` are kept
+/// (each maps to one Return click). Pure, order/content preserving.
+pub fn normalize_newlines(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\r' && chars.peek() == Some(&'\n') {
+            chars.next(); // consume the pair
+            out.push('\n');
+        } else {
+            out.push(ch);
         }
     }
-    if !current.is_empty() {
-        chunks.push(current);
-    }
-    chunks
+    out
 }
 
 /// The compiled execution plan for one action: ordered events plus the
@@ -93,22 +97,54 @@ impl Plan {
     /// releasing a key/button whose press failed or was never attempted can
     /// unlock UI state (window drag, menu, modifier) the user owns.
     pub fn is_answered_release(&self, index: usize, pressed: &[usize]) -> bool {
-        let is_release = matches!(
-            self.events.get(index),
-            Some(PlanEvent::Button {
-                direction: Direction::Release,
-                ..
-            }) | Some(PlanEvent::Key {
-                direction: Direction::Release,
-                ..
+        let release = match self.events.get(index) {
+            Some(
+                event @ PlanEvent::Button {
+                    direction: Direction::Release,
+                    ..
+                },
+            )
+            | Some(
+                event @ PlanEvent::Key {
+                    direction: Direction::Release,
+                    ..
+                },
+            ) => event,
+            _ => return false,
+        };
+        // Find the last event for THIS pair, not just any earlier press.
+        // Otherwise cancellation during click 2 can emit click 3's up event
+        // even though click 3 was never pressed (or re-release click 1).
+        self.events[..index]
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(p, event)| {
+                let direction = match (release, event) {
+                    (
+                        PlanEvent::Button {
+                            button,
+                            click_count,
+                            ..
+                        },
+                        PlanEvent::Button {
+                            button: prior_button,
+                            click_count: prior_count,
+                            direction,
+                        },
+                    ) if button == prior_button && click_count == prior_count => direction,
+                    (
+                        PlanEvent::Key { key, .. },
+                        PlanEvent::Key {
+                            key: prior_key,
+                            direction,
+                        },
+                    ) if key == prior_key => direction,
+                    _ => return None,
+                };
+                Some(*direction == Direction::Press && pressed.contains(&p))
             })
-        );
-        if !is_release {
-            return false;
-        }
-        // Every earlier press was injected successfully; a failed press would
-        // have stopped the dispatch loop before reaching this release.
-        pressed.iter().any(|&p| p < index)
+            .unwrap_or(false)
     }
 
     /// Convert the planned event at `index` into a backend `InputEvent`,
@@ -123,15 +159,22 @@ impl Plan {
                 let (x, y) = map(*p);
                 Some(InputEvent::Move { x, y })
             }
-            PlanEvent::Button { button, direction } => Some(InputEvent::Button {
+            PlanEvent::Button {
+                button,
+                direction,
+                click_count,
+            } => Some(InputEvent::Button {
                 button: button.clone(),
                 direction: *direction,
+                click_count: *click_count,
             }),
             PlanEvent::Key { key, direction } => Some(InputEvent::Key {
                 key: key.clone(),
                 direction: *direction,
             }),
-            PlanEvent::Text(t) => Some(InputEvent::Text { text: t.clone() }),
+            PlanEvent::TextScalar(ch) => Some(InputEvent::Text {
+                text: ch.to_string(),
+            }),
             PlanEvent::Scroll { x, y } => Some(InputEvent::Scroll { x: *x, y: *y }),
             PlanEvent::Sleep(_) => None,
         }
@@ -155,13 +198,18 @@ pub fn compile_plan(action: &Action, drag_moves: usize) -> Plan {
                 if i > 0 {
                     events.push(PlanEvent::Sleep(MULTI_CLICK_INTERVAL_MS));
                 }
+                // Pair i carries native click-state i+1: THIS press/up pair's
+                // multi-click position in the OS click sequence, not an
+                // instruction for a driver loop.
                 events.push(PlanEvent::Button {
                     button: button.name().to_string(),
                     direction: Direction::Press,
+                    click_count: i + 1,
                 });
                 events.push(PlanEvent::Button {
                     button: button.name().to_string(),
                     direction: Direction::Release,
+                    click_count: i + 1,
                 });
             }
             if *count > 0 {
@@ -182,6 +230,7 @@ pub fn compile_plan(action: &Action, drag_moves: usize) -> Plan {
             events.push(PlanEvent::Button {
                 button: button.name().to_string(),
                 direction: Direction::Press,
+                click_count: 1,
             });
             let moves = drag_moves.max(1);
             let interval = duration_ms / moves as u64;
@@ -194,6 +243,7 @@ pub fn compile_plan(action: &Action, drag_moves: usize) -> Plan {
             events.push(PlanEvent::Button {
                 button: button.name().to_string(),
                 direction: Direction::Release,
+                click_count: 1,
             });
             hold_end = events.len();
         }
@@ -209,8 +259,16 @@ pub fn compile_plan(action: &Action, drag_moves: usize) -> Plan {
             });
         }
         Action::TextInput { text } => {
-            for chunk in chunk_text(text, TEXT_CHUNK_CHARS) {
-                events.push(PlanEvent::Text(chunk));
+            // One event per Unicode scalar with an interruptible Sleep
+            // BETWEEN scalars (none after the last), so cancellation lands
+            // between characters and long texts stay bounded per event.
+            // CRLF is normalized once here (single Return click per pair).
+            let normalized = normalize_newlines(text);
+            for (i, ch) in normalized.chars().enumerate() {
+                if i > 0 {
+                    events.push(PlanEvent::Sleep(TEXT_SCALAR_INTERVAL_MS));
+                }
+                events.push(PlanEvent::TextScalar(ch));
             }
         }
         Action::KeyChord { modifiers, key } => {
@@ -320,31 +378,78 @@ mod tests {
     }
 
     #[test]
-    fn text_is_split_into_bounded_chunks() {
-        let text = "a".repeat(4096);
-        let chunks = chunk_text(&text, TEXT_CHUNK_CHARS);
-        assert_eq!(chunks.len(), 64);
-        assert!(chunks.iter().all(|c| c.chars().count() <= TEXT_CHUNK_CHARS));
-        assert_eq!(chunks.concat(), text);
+    fn text_is_split_into_per_scalar_events_with_intervals_between() {
+        let text = "abc".repeat(500); // 1500 scalars
+        let action = Action::TextInput { text: text.clone() };
+        let plan = compile_plan(&action, 1);
+        let scalars = plan
+            .events
+            .iter()
+            .filter(|e| matches!(e, PlanEvent::TextScalar(_)))
+            .count();
+        let sleeps = plan
+            .events
+            .iter()
+            .filter(|e| matches!(e, PlanEvent::Sleep(TEXT_SCALAR_INTERVAL_MS)))
+            .count();
+        assert_eq!(scalars, text.chars().count());
+        assert_eq!(
+            sleeps,
+            text.chars().count() - 1,
+            "no sleep after the last scalar"
+        );
+        // Reconstruct: scalars in order, no other input events.
+        let mut rebuilt = String::new();
+        for e in &plan.events {
+            match e {
+                PlanEvent::TextScalar(ch) => rebuilt.push(*ch),
+                PlanEvent::Sleep(_) => {}
+                other => panic!("unexpected event in text plan: {other:?}"),
+            }
+        }
+        assert_eq!(rebuilt, text);
     }
 
     #[test]
-    fn text_chunking_respects_unicode_boundaries() {
-        let text = "汉".repeat(100);
-        let chunks = chunk_text(&text, 30);
-        assert_eq!(chunks.len(), 4);
-        assert_eq!(chunks.concat(), text);
-        assert!(chunks.iter().all(|c| c.chars().count() <= 30));
-    }
-
-    #[test]
-    fn short_text_stays_one_event() {
+    fn text_planning_normalizes_crlf_once() {
         let action = Action::TextInput {
-            text: "hello".into(),
+            text: "a\r\nb\nc\rd".into(),
         };
         let plan = compile_plan(&action, 1);
+        let scalars: Vec<char> = plan
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                PlanEvent::TextScalar(ch) => Some(*ch),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(scalars, vec!['a', '\n', 'b', '\n', 'c', '\r', 'd']);
+    }
+
+    #[test]
+    fn text_planning_preserves_unicode_boundaries() {
+        let action = Action::TextInput {
+            text: "汉漢字".into(),
+        };
+        let plan = compile_plan(&action, 1);
+        let scalars: Vec<char> = plan
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                PlanEvent::TextScalar(ch) => Some(*ch),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(scalars, vec!['汉', '漢', '字']);
+    }
+
+    #[test]
+    fn short_text_is_one_scalar_with_no_interval() {
+        let action = Action::TextInput { text: "x".into() };
+        let plan = compile_plan(&action, 1);
         assert_eq!(plan.events.len(), 1);
-        assert!(matches!(&plan.events[0], PlanEvent::Text(t) if t == "hello"));
+        assert!(matches!(&plan.events[0], PlanEvent::TextScalar('x')));
     }
 
     #[test]
@@ -408,5 +513,126 @@ mod tests {
         assert_eq!(plan.events.len(), 6);
         assert_eq!(plan.hold_press, Some(1));
         assert_eq!(plan.hold_end, 6);
+    }
+
+    /// count=N must emit N press/up pairs whose click_count metadata is
+    /// 1..=N (the native click-state of EACH pair), not 1 repeated N times.
+    #[test]
+    fn multi_click_pairs_carry_increasing_click_count() {
+        let action = Action::Click {
+            position: [3, 4],
+            button: MouseButton::Left,
+            count: 3,
+        };
+        let plan = compile_plan(&action, 1);
+        let click_counts: Vec<u8> = plan
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                PlanEvent::Button { click_count, .. } => Some(*click_count),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            click_counts,
+            vec![1, 1, 2, 2, 3, 3],
+            "press/up pair i must carry native click-state i, not a constant 1"
+        );
+    }
+
+    #[test]
+    fn single_click_and_drag_carry_click_count_one() {
+        let click = compile_plan(
+            &Action::Click {
+                position: [0, 0],
+                button: MouseButton::Left,
+                count: 1,
+            },
+            1,
+        );
+        assert!(click.events.iter().all(|e| match e {
+            PlanEvent::Button { click_count, .. } => *click_count == 1,
+            _ => true,
+        }));
+        let drag = compile_plan(
+            &Action::Drag {
+                path: vec![[0, 0], [10, 10]],
+                button: MouseButton::Left,
+                duration_ms: 100,
+            },
+            1,
+        );
+        assert!(
+            drag.events.iter().all(|e| match e {
+                PlanEvent::Button { click_count, .. } => *click_count == 1,
+                _ => true,
+            }),
+            "drag press/release is always click-state 1"
+        );
+    }
+    #[test]
+    fn release_pass_only_answers_the_same_successfully_pressed_pair() {
+        let plan = compile_plan(
+            &Action::Click {
+                position: [0, 0],
+                button: MouseButton::Left,
+                count: 3,
+            },
+            1,
+        );
+        // move, down1, up1, gap, down2, up2, gap, down3, up3.
+        assert!(plan.is_answered_release(2, &[1]));
+        assert!(!plan.is_answered_release(5, &[1]));
+        assert!(plan.is_answered_release(5, &[1, 4]));
+        assert!(!plan.is_answered_release(8, &[1, 4]));
+        assert!(plan.is_answered_release(8, &[1, 4, 7]));
+        // A failed chord key must not borrow its modifier's successful press.
+        let chord = compile_plan(
+            &Action::KeyChord {
+                modifiers: vec!["ctrl".into()],
+                key: "s".into(),
+            },
+            1,
+        );
+        assert!(!chord.is_answered_release(2, &[0]));
+        assert!(chord.is_answered_release(3, &[0]));
+    }
+
+    #[test]
+    fn counts_one_two_three_map_to_backend_with_runtime_owned_gaps() {
+        for count in 1..=3 {
+            let plan = compile_plan(
+                &Action::Click {
+                    position: [9, 12],
+                    button: MouseButton::Right,
+                    count,
+                },
+                1,
+            );
+            let expected: Vec<_> = (1..=count)
+                .flat_map(|click_count| {
+                    [Direction::Press, Direction::Release].map(|direction| InputEvent::Button {
+                        button: "right".into(),
+                        direction,
+                        click_count,
+                    })
+                })
+                .collect();
+            let actual: Vec<_> = (0..plan.events.len())
+                .filter_map(|i| {
+                    plan.backend_event(i, |[x, y]| (x, y))
+                        .filter(|e| matches!(e, InputEvent::Button { .. }))
+                })
+                .collect();
+            assert_eq!(actual, expected);
+            assert_eq!(
+                plan.events
+                    .iter()
+                    .filter(|e| matches!(e,
+                PlanEvent::Sleep(ms) if *ms == MULTI_CLICK_INTERVAL_MS))
+                    .count(),
+                usize::from(count - 1)
+            );
+        }
     }
 }

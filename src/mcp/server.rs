@@ -340,10 +340,7 @@ impl<'a> McpService<'a> {
                 "request was cancelled while queued",
             ));
             return (
-                vec![jsonrpc::result_response(
-                    id,
-                    jsonrpc::tool_call_result(&reply),
-                )],
+                vec![super::bounded_output::tool_response(id, &reply)],
                 Action::Continue,
             );
         }
@@ -371,10 +368,7 @@ impl<'a> McpService<'a> {
                     Action::Continue
                 };
                 (
-                    vec![jsonrpc::result_response(
-                        id,
-                        jsonrpc::tool_call_result(&reply),
-                    )],
+                    vec![super::bounded_output::tool_response(id, &reply)],
                     action,
                 )
             }

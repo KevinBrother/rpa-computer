@@ -6,5 +6,6 @@
 //! drives the runtime through MCP tools.
 
 pub mod backend;
+pub mod feedback;
 pub mod mcp;
 pub mod runtime;

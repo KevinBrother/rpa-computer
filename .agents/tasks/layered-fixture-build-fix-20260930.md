@@ -1,0 +1,2 @@
+继续fixture实现，只写你原有fixture范围和报告，不GUI、不commit/push。协调者在acer-win真实csc编译得到确定错误（日志 .agents/runs/layered-win-build-20260930.log）：windows/Cases.cs:333 Delegate Action does not take 2 arguments。查看add/add0的签名，在suite-parse-loop把2参数调用用正确helper，并检查所有同类调用。直接最小补丁，不重新长篇设计。
+之后在本机重跑macbuild（新唯一目录）/self-test与parity工具可用部分；Windows真正csc compile/selftest由coord再跑，不能假称通过。不要修改.case目录或减少case覆盖。报告更正Windows未验证项为初次编译失败已修、等待真机重编译。顺便检查AppKit大字号label、当前case/suite header、Check结果布局不能被隐藏/裁切；不要擅自GUI或系统主题设置。仅静态检查，实际可读性留coord截图。
