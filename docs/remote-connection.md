@@ -40,16 +40,9 @@ cargo build --release --bins
 # 产物: target/release/computer-host(.exe) 和 target/release/computer-client
 ```
 
-**跨平台交叉编译（Mac → Windows，可选）**：首次失败若缺 `llvm-lib`，**无需安装任何新工具**——Rust 自带的 `rust-lld` 支持 `-flavor link` 提供 `link.exe`/`lib.exe` 兼容模式。以下为 **Mac(aarch64-apple-darwin) 特定**环境变通（已验证），并非通用要求；Windows 本机在装有标准 MSVC 工具链时直接 `cargo build` 即可：
-
-```bash
-# 仅适用于 Mac 上交叉编译到 x86_64-pc-windows-msvc；不要硬编码用户主目录
-eval "$(cargo xwin env --target x86_64-pc-windows-msvc)"
-export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib"
-export AR_x86_64_pc_windows_msvc="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/rust-lld"
-export ARFLAGS_x86_64_pc_windows_msvc='-flavor link /lib'
-cargo build --release --target x86_64-pc-windows-msvc --bins --offline
-```
+**macOS → Windows 交叉编译**：使用 [README 的完整构建命令](../README.md#macos--windows-交叉编译)，
+其中包含本机缺少 `llvm-lib` 时的归档器配置。两个 `.exe` 产物位于项目内
+`target/x86_64-pc-windows-msvc/release/`。
 
 ## 2. 查询 Windows 的 LAN 地址
 

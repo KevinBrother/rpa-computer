@@ -96,13 +96,36 @@ Session1 交互式桌面中，**真实截图（含缩放后的实际图像）与
 cargo build --release --bin computer-host                          # macOS 本机
 # Windows 原生（在 Windows 机器上）：
 cargo build --release --target x86_64-pc-windows-msvc --bin computer-host
-# 本机交叉编译（本环境已缓存 cargo xwin 0.23.1 + SDK/CRT，经
-# scripts/discover-windows-toolchain.sh 只读检测）：
-cargo xwin build --release --target x86_64-pc-windows-msvc
 ```
 
-构建通过仅说明产物可编译部署；与"输入/截屏已在真实桌面验证成功"是两回事
-（后者当前未完成，见"当前状态"）。
+### macOS → Windows 交叉编译
+
+在项目根目录执行以下完整命令。本机缺少独立的 `llvm-lib`，因此使用 Rust 自带的
+`rust-lld` 作为归档器；通过独立 Bash 执行，环境设置不会修改当前终端、全局配置或输出目录。
+请连同 `bash` 和结尾的 `BASH` 一起复制；仅用 `(...)` 仍会继承当前 zsh 的函数和目录切换钩子，
+这些钩子的非零返回值可能触发 `set -e`，导致尚未构建就退出。
+
+```bash
+bash <<'BASH'
+  set -e
+  xwin_env="$(cargo xwin env --target x86_64-pc-windows-msvc)"
+  eval "$xwin_env"
+  rust_sysroot="$(rustc --print sysroot)"
+  rust_host="$(rustc -vV | sed -n 's/^host: //p')"
+  export DYLD_LIBRARY_PATH="$rust_sysroot/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+  export AR_x86_64_pc_windows_msvc="$rust_sysroot/lib/rustlib/$rust_host/bin/rust-lld"
+  export ARFLAGS_x86_64_pc_windows_msvc='-flavor link /lib'
+  cargo build --release --target x86_64-pc-windows-msvc --bins --locked
+BASH
+```
+
+产物位于项目内 `target/x86_64-pc-windows-msvc/release/`：
+`computer-host.exe` 和 `computer-client.exe`。磁盘空间不足时，先释放空间再构建。
+
+`scripts/discover-windows-toolchain.sh [ssh-host]` 仅检测远端 Windows 工具链，
+不负责本机交叉编译环境配置。
+
+构建通过仅说明产物可编译部署；不等于真实桌面上的截屏、输入和视觉任务全部验收通过。
 
 ## 测试
 
