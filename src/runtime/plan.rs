@@ -23,6 +23,9 @@ pub enum PlanEvent {
     /// One Unicode scalar for the native text path (see `compile_plan`'s
     /// TextInput branch). Enter/Tab mapping happens in the backend.
     TextScalar(char),
+    /// One backend-owned clipboard transaction, never scalar/key expansion.
+    /// Payload normalization and guarded Ctrl+V belong to the Windows backend.
+    TextPaste(String),
     Scroll {
         x: i32,
         y: i32,
@@ -175,6 +178,7 @@ impl Plan {
             PlanEvent::TextScalar(ch) => Some(InputEvent::Text {
                 text: ch.to_string(),
             }),
+            PlanEvent::TextPaste(text) => Some(InputEvent::TextPaste { text: text.clone() }),
             PlanEvent::Scroll { x, y } => Some(InputEvent::Scroll { x: *x, y: *y }),
             PlanEvent::Sleep(_) => None,
         }
@@ -269,6 +273,13 @@ pub fn compile_plan(action: &Action, drag_moves: usize) -> Plan {
                     events.push(PlanEvent::Sleep(TEXT_SCALAR_INTERVAL_MS));
                 }
                 events.push(PlanEvent::TextScalar(ch));
+            }
+        }
+        Action::TextPaste { text } => {
+            // Empty text must not replace the clipboard or send Ctrl+V.
+            // Keep the original payload intact, including tabs and CR/LF.
+            if !text.is_empty() {
+                events.push(PlanEvent::TextPaste(text.clone()));
             }
         }
         Action::KeyChord { modifiers, key } => {
@@ -634,5 +645,35 @@ mod tests {
                 usize::from(count - 1)
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod text_paste_tests {
+    use super::*;
+    use crate::runtime::actions::parse_action;
+    use serde_json::json;
+
+    fn paste(text: &str) -> Action {
+        let action =
+            parse_action(&json!({"kind": "text_input", "method": "paste", "text": text})).unwrap();
+        assert_eq!(action, Action::TextPaste { text: text.into() });
+        action
+    }
+
+    #[test]
+    fn whole_multiline_payload_is_one_paste_event_without_normalization_or_keys() {
+        let text = "中文，ASCII !?🙂\tA\r\nB\nC\rD";
+        let plan = compile_plan(&paste(text), 1);
+        assert_eq!(plan.events, vec![PlanEvent::TextPaste(text.into())]);
+        assert_eq!(
+            plan.backend_event(0, |_| panic!("paste has no coordinates")),
+            Some(InputEvent::TextPaste { text: text.into() })
+        );
+        assert!(plan.is_input_event(0));
+        assert!(!plan.is_press_event(0));
+        assert!(!plan.is_answered_release(0, &[]));
+        assert_eq!(plan.hold_press, None);
+        assert_eq!(plan.hold_end, 0);
     }
 }

@@ -35,6 +35,8 @@ pub mod display;
 pub mod keys;
 #[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
 mod live_test;
+#[cfg(target_os = "windows")]
+mod windows_clipboard;
 
 #[cfg(target_os = "linux")]
 pub(crate) mod linux;
@@ -107,6 +109,10 @@ pub enum InputEvent {
         direction: Direction,
     },
     Text {
+        text: String,
+    },
+    /// Explicit whole-text clipboard paste, initially Windows-only.
+    TextPaste {
         text: String,
     },
     /// Wheel ticks, positive = right/down.

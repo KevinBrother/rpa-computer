@@ -51,6 +51,40 @@
   取消竞态）。该竞态已由传输写者修复（见 `.agents/reports/` 下传输收尾报告），
   锁屏问题已在解锁的交互式会话中解除，但如上文所述，语义验收仍未通过。
 
+## 文本输入：native 与 Windows 显式 paste
+
+`computer_step.action` 的 `text_input` 支持可选 `method: "native" | "paste"`，
+省略时为 `native`；公共动作名称仍为 `text_input`。
+
+```json
+{"kind":"text_input","text":"原生输入（默认）"}
+{"kind":"text_input","method":"native","text":"显式原生输入"}
+{"kind":"text_input","method":"paste","text":"中文、ASCII !?、🙂\t第二列\n第二行"}
+```
+
+- **native**：保持已有逐 Unicode scalar 注入与字符间取消语义；Tab/换行仍映射
+  为对应按键。不会悄悄切换到粘贴。paste 的验证结果不能证明 native/IME 路径正确。
+- **paste（仅 Windows，显式选择）**：建议用于 IME 敏感控件，但必须接受
+  **覆盖共享系统剪贴板**。Host 把整段文本写入剪贴板后派发受保护的 Ctrl+V；
+  不改变焦点或输入法。完成后**剪贴板保留该文本**，不读取、记录或恢复用户先前
+  的富文本/文件等剪贴板内容，也没有定时恢复、自动重试或 native fallback。
+  非 Windows 不支持非空 paste；空文本对两种方法均为无输入效果的 no-op。
+- 两种方法都先校验整个 payload：最多 **4096 个 Unicode scalar**（不是 UTF-8
+  字节数或 UTF-16 单元数）；拒绝 NUL、除 TAB/LF/CR 外的 C0 控制字符及 DEL。
+  paste 把 Tab 和换行保留为**数据**，不生成 Enter/Tab 按键；Windows 写剪贴板时
+  把 CRLF、单独 CR、单独 LF 统一为 CRLF，其余 Unicode scalar 不变。
+- 非空 paste 是一个后端事务，不拆成逐字符事件。事务开始前取消不会粘贴；
+  一旦进入事务，后续取消不能撤回已排队的粘贴。`dispatched` 只表示系统 API
+  接收了输入，**不证明应用已读取剪贴板或目标文字正确**；需重新观察确认。
+- 会话已有按住的输入或外部 Ctrl/Shift/Alt/Win/V 被按住时拒绝粘贴；剪贴板忙时
+  立即失败。Host 在发送前复核前台窗口、焦点控件和剪贴板序列，但这些仅为
+  best-effort 竞态检查，不能让用户并发输入与 SendInput 原子化；仍需串行桌面所有权。
+  剪贴板清空后若系统 API 失败，剪贴板可能已被覆盖或为空；错误不意味着无副作用，
+  不应盲目重放。
+
+新增契约/后端测试与真实 Windows 多行精确文字验收是不同门禁；mock 派发通过不等于
+真实粘贴验收通过。Windows CC+GLM 验收由协调者独立执行，不发送给真实聊天联系人。
+
 ## computer-host 命令行
 
 ```text

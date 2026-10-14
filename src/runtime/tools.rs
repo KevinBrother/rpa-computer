@@ -99,7 +99,8 @@ fn action_schema() -> Value {
                 "type": "object",
                 "properties": {
                     "kind": {"const": "text_input"},
-                    "text": {"type": "string", "maxLength": TEXT_MAX_CHARS, "description": "Unicode text typed as characters. Use key_chord for shortcuts, not control characters."},
+                    "text": {"type": "string", "maxLength": TEXT_MAX_CHARS, "description": "Up to 4096 Unicode scalars; empty text is a no-op. NUL, other C0 controls except TAB/LF/CR, and DEL are rejected before effects. Native types scalars and maps tabs/newlines to keys. Paste preserves tabs/newlines as clipboard data (Windows CRLF), without Enter/Tab events. Use key_chord for shortcuts."},
+                    "method": {"type": "string", "enum": ["native", "paste"], "default": "native", "description": "native (default) uses native text injection unchanged. paste is explicit and Windows-only: it will overwrite the shared system clipboard and leaves it containing the payload; no automatic restore, retry, or native fallback. Prefer paste for IME-sensitive controls when clipboard overwrite is acceptable. Dispatch is not proof the application consumed the text. Cancellation before dispatch has no paste effects; after the transaction starts it cannot undo queued paste."},
                 },
                 "required": ["kind", "text"],
                 "additionalProperties": false,

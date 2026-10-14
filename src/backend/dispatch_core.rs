@@ -18,7 +18,10 @@
 //!   is normalized once (a `"\r\n"` pair produces exactly ONE Return click);
 //!   each remaining `'\n'`/`'\r'` produces ONE Return click and `'\t'` ONE
 //!   Tab click — through the same held-state machine as explicit keys. Every
-//!   other scalar goes to the native text path. Text is never clipboard.
+//!   other scalar goes to the native text path. Native Text is never clipboard.
+//! - **TextPaste**: whole-text validation and held-input rejection precede
+//!   explicit clipboard preparation, a last-moment guard, and tracked Ctrl+V.
+//!   Partial chord failures remain owned for the existing release_all path.
 
 use std::collections::{HashMap, HashSet};
 
@@ -119,6 +122,36 @@ impl<I: NativeInput> BackendCore<I> {
         }
     }
 
+    fn paste_text(&mut self, text: &str) -> Result<(), BackendError> {
+        keys::validate_paste_text(text)?;
+        if text.is_empty() {
+            return Ok(());
+        }
+        if !self.held.is_empty() || !self.held_buttons.is_empty() {
+            return Err(BackendError::new(
+                "input_failed",
+                "paste requires no session-held keys or buttons; clipboard unchanged",
+            ));
+        }
+        self.input.prepare_text_paste(text)?;
+        self.input.verify_text_paste()?;
+        for (key, direction) in [
+            ("ctrl", Direction::Press),
+            ("v", Direction::Press),
+            ("v", Direction::Release),
+            ("ctrl", Direction::Release),
+        ] {
+            // Reuse exactly the explicit-key ownership/partial failure rules.
+            // The caller's release_all (or Drop) cleans up attempted presses.
+            self.inject_event(&InputEvent::Key { key: key.into(), direction })
+                .map_err(|e| BackendError::new(
+                    e.code,
+                    format!("paste chord dispatch failed: {}; clipboard already modified; paste may have been queued", e.message),
+                ))?;
+        }
+        Ok(())
+    }
+
     /// Execute one atomic input event, validating names BEFORE any dispatch
     /// and maintaining held-state per the module-level semantics.
     pub(crate) fn inject_event(&mut self, event: &InputEvent) -> Result<(), BackendError> {
@@ -172,6 +205,7 @@ impl<I: NativeInput> BackendCore<I> {
                     }
                 }
             }
+            InputEvent::TextPaste { text } => self.paste_text(text)?,
             InputEvent::Text { text } => {
                 // Validate the WHOLE payload before any dispatch, then inject
                 // scalar by scalar. CRLF is normalized once here so a
@@ -272,3 +306,7 @@ impl<I: NativeInput> Drop for BackendCore<I> {
         self.held_buttons.clear();
     }
 }
+
+#[cfg(test)]
+#[path = "text_paste_tests.rs"]
+mod text_paste_tests;

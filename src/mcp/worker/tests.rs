@@ -62,9 +62,7 @@ impl Backend for FakeBackend {
         let desc = match event {
             InputEvent::Move { x, y } => format!("move {x},{y}"),
             InputEvent::Button {
-                button,
-                direction,
-                ..
+                button, direction, ..
             } => format!(
                 "button {button} {}",
                 if *direction == Direction::Press {
@@ -82,6 +80,7 @@ impl Backend for FakeBackend {
                 }
             ),
             InputEvent::Text { text } => format!("text len={}", text.chars().count()),
+            InputEvent::TextPaste { text } => format!("paste len={}", text.chars().count()),
             InputEvent::Scroll { x, y } => format!("scroll {x},{y}"),
         };
         self.events.lock().unwrap().push(desc);

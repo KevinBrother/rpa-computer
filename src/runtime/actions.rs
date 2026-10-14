@@ -65,6 +65,10 @@ pub enum Action {
     TextInput {
         text: String,
     },
+    /// Explicit whole-text clipboard paste; public kind remains `text_input`.
+    TextPaste {
+        text: String,
+    },
     KeyChord {
         modifiers: Vec<String>,
         key: String,
@@ -101,7 +105,7 @@ impl Action {
             Action::Move { .. } => "move",
             Action::Drag { .. } => "drag",
             Action::Scroll { .. } => "scroll",
-            Action::TextInput { .. } => "text_input",
+            Action::TextInput { .. } | Action::TextPaste { .. } => "text_input",
             Action::KeyChord { .. } => "key_chord",
             Action::KeyHold { .. } => "key_hold",
         }
@@ -143,7 +147,7 @@ pub fn parse_action(value: &serde_json::Value) -> Result<Action, ToolError> {
         "move" => &["kind", "position"],
         "drag" => &["kind", "path", "button", "duration_ms"],
         "scroll" => &["kind", "position", "delta_x", "delta_y", "unit"],
-        "text_input" => &["kind", "text"],
+        "text_input" => &["kind", "text", "method"],
         "key_chord" => &["kind", "modifiers", "key"],
         "key_hold" => &["kind", "key", "duration_ms"],
         other => {
@@ -248,6 +252,15 @@ pub fn parse_action(value: &serde_json::Value) -> Result<Action, ToolError> {
             })
         }
         "text_input" => {
+            let method = match obj.get("method") {
+                None => "native",
+                Some(value) => match value.as_str() {
+                    Some(method @ ("native" | "paste")) => method,
+                    _ => {
+                        return Err(invalid("text_input.method must be native or paste".into()));
+                    }
+                },
+            };
             let text = obj
                 .get("text")
                 .and_then(|t| t.as_str())
@@ -262,11 +275,13 @@ pub fn parse_action(value: &serde_json::Value) -> Result<Action, ToolError> {
             // would otherwise inject every scalar BEFORE rejecting a control
             // character partway through ("abc\0" must not type "abc"). Shared
             // C0 policy with the backend boundary (NUL/other C0/DEL rejected;
-            // TAB/LF/CR map to real Tab/Return clicks).
+            // TAB/LF/CR are allowed for either method).
             crate::backend::keys::validate_text(text)
                 .map_err(|e| invalid(format!("text_input.text: {}", e.message)))?;
-            Ok(Action::TextInput {
-                text: text.to_string(),
+            let text = text.to_string();
+            Ok(match method {
+                "paste" => Action::TextPaste { text },
+                _ => Action::TextInput { text },
             })
         }
         "key_chord" => {

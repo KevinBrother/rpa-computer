@@ -23,12 +23,19 @@ rustls-pki-types = { version = "1.15.1", features = ["std"] }
 libc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-# Official bindings for the Windows backend DPI declarations (replaces the
-# previous hand-written user32 externs). Keep in sync with the
-# rpa-native-input crate's windows features.
+# Official bindings for host-owned DPI and explicit clipboard paste.
+# Native-input remains independent of the clipboard path.
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_UI_HiDpi",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_System_StationsAndDesktops",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 
 [profile.release]

@@ -38,6 +38,21 @@ pub(crate) trait NativeInput {
     /// `'\t'`→Tab mapping is applied by `BackendCore` (so the clicks go
     /// through its held-state machine); everything else lands here.
     fn text_scalar(&mut self, ch: char) -> Result<(), BackendError>;
+    /// Explicit host clipboard path, never a fallback for native text. On
+    /// success the clipboard has been replaced; verify immediately before
+    /// dispatching the chord. Unsupported platforms must have no effects.
+    fn prepare_text_paste(&mut self, _text: &str) -> Result<(), BackendError> {
+        Err(BackendError::new(
+            "unsupported_platform",
+            "explicit clipboard paste is supported only on Windows; clipboard unchanged",
+        ))
+    }
+    fn verify_text_paste(&mut self) -> Result<(), BackendError> {
+        Err(BackendError::new(
+            "unsupported_platform",
+            "explicit clipboard paste is supported only on Windows; clipboard unchanged",
+        ))
+    }
 }
 
 /// Scroll axis (mirrors `rpa_native_input::Axis` without leaking it into the seam).
@@ -58,15 +73,41 @@ pub(crate) enum Axis {
 ///   alphanumerics.
 pub(crate) struct DriverInput {
     driver: Box<dyn Driver>,
+    #[cfg(target_os = "windows")]
+    prepared_paste: Option<super::windows_clipboard::PreparedPaste>,
 }
 
 impl DriverInput {
     pub(crate) fn new(driver: Box<dyn Driver>) -> Self {
-        Self { driver }
+        Self {
+            driver,
+            #[cfg(target_os = "windows")]
+            prepared_paste: None,
+        }
     }
 }
 
 impl NativeInput for DriverInput {
+    #[cfg(target_os = "windows")]
+    fn prepare_text_paste(&mut self, text: &str) -> Result<(), BackendError> {
+        // A failed preparation must never leave a usable old receipt.
+        self.prepared_paste = None;
+        self.prepared_paste = Some(super::windows_clipboard::prepare(text)?);
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    fn verify_text_paste(&mut self) -> Result<(), BackendError> {
+        // Consume even on guard failure; receipts cannot authorize a retry.
+        let prepared = self.prepared_paste.take().ok_or_else(|| {
+            BackendError::new(
+                "input_failed",
+                "no prepared clipboard paste receipt; clipboard state unknown",
+            )
+        })?;
+        prepared.verify()
+    }
+
     fn move_mouse(&mut self, x: i32, y: i32) -> Result<(), BackendError> {
         self.driver
             .move_mouse(x, y)

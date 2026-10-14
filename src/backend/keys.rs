@@ -187,6 +187,19 @@ pub fn validate_text(text: &str) -> Result<(), BackendError> {
     Ok(())
 }
 
+/// Paste is one bounded transaction even when invoked below the runtime parser.
+/// Keep native text validation/dispatch semantics independent of this limit.
+pub(crate) fn validate_paste_text(text: &str) -> Result<(), BackendError> {
+    validate_text(text)?;
+    if text.chars().count() > 4096 {
+        return Err(BackendError::new(
+            "invalid_text",
+            "paste text exceeds 4096 Unicode scalars; clipboard unchanged",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
