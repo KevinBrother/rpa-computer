@@ -2,7 +2,7 @@ use super::{
     assets::Assets,
     common, identity,
     owned::{self, OwnedWorker},
-    peer::Peer,
+    peer::{data, Peer},
 };
 use serde_json::{json, Value};
 use std::{
@@ -115,7 +115,7 @@ impl Supervisor {
         s.addr = s.ready["listen"].as_str().unwrap().parse().unwrap();
         assert_eq!(s.addr.ip(), std::net::Ipv4Addr::LOCALHOST);
         assert_ne!(s.addr.port(), 0);
-        let prefix = format!("remote TLS transport listening on {} ", s.addr);
+        let prefix = format!("remote TLS listening on {} ", s.addr);
         let until = Instant::now() + Duration::from_secs(5);
         while !s.log().contains(&prefix) {
             s.tick(until);
@@ -270,6 +270,41 @@ impl Supervisor {
             self.tick(until);
         }
     }
+    pub fn assert_session_mapping(&mut self, index: usize, external: &str) {
+        let observed = self.worker_file(index, "child-open.json");
+        assert_eq!(observed["kind"], "passive_child_open_response");
+        assert_eq!(observed["identity"], self.workers[index].ready["identity"]);
+        assert_eq!(observed["request_id"], observed["response"]["id"]);
+        let open = data(observed["response"]["result"].clone());
+        assert_eq!(open["state"], "ready");
+        assert_eq!(open["session_id"], observed["session_id"]);
+        assert_ne!(
+            observed["session_id"], external,
+            "broker must map task authority, not expose the child session"
+        );
+        self.note(json!({"kind":"verified_session_mapping","worker":index,
+            "external_session_id":external,"observed_child_open":observed}));
+    }
+
+    fn assert_no_unclaimed_workers(&self) {
+        for entry in fs::read_dir(&self.dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir()
+                && path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("worker-")
+            {
+                assert!(
+                    self.workers.iter().any(|worker| worker.dir == path),
+                    "read-only status unexpectedly created a task executor: {}",
+                    path.display()
+                );
+            }
+        }
+    }
+
     pub fn worker_file(&mut self, index: usize, name: &str) -> Value {
         let p = self.workers[index].dir.join(name);
         self.wait_json(&p, Duration::from_secs(8))
@@ -282,24 +317,56 @@ impl Supervisor {
     ) -> Value {
         let until = Instant::now() + Duration::from_secs(20);
         let terminal_path = self.workers[index].dir.join("terminal.json");
-        let reap_prefix = format!("remote client {peer} session ended; worker child exited with ");
-        loop {
+        // Discovery is broker-local. This authenticated observer never opens a
+        // task and is not used to cause cancellation/cleanup of the owned child.
+        let mut observer = self.connect(false);
+        let init = observer.request(
+            1,
+            "initialize",
+            json!({"protocolVersion":"2025-03-26",
+            "capabilities":{},"clientInfo":{"name":"retirement-observer","version":"1"}}),
+        );
+        assert_eq!(init["serverInfo"]["version"], env!("CARGO_PKG_VERSION"));
+        observer.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
+        let mut request_id = 2;
+        let broker_status = loop {
             if let Some(p) = network.as_mut() {
                 p.drain_tail().unwrap();
             }
-            if terminal_path.exists()
-                && self.workers[index].process.status().unwrap() == Some(0)
-                && self.log().contains(&reap_prefix)
-            {
-                break;
+            if terminal_path.exists() && self.workers[index].process.status().unwrap() == Some(0) {
+                let description = data(observer.request(
+                    request_id,
+                    "tools/call",
+                    json!({"name":"computer_describe","arguments":{}}),
+                ));
+                request_id += 1;
+                let status = description["desktop_control"].clone();
+                assert_eq!(status["owned_by_this_connection"], false);
+                self.assert_no_unclaimed_workers();
+                match status["state"].as_str() {
+                    Some("available") => break status,
+                    Some("cleaning" | "owned") => {}
+                    other => panic!(
+                        "retirement did not confirm safe authority: {other:?}: {description}"
+                    ),
+                }
             }
             self.tick(until);
-        }
+        };
         self.assert_healthy();
+        assert!(!self.workers[index].process.kill_used);
         let v = common::read(&terminal_path).unwrap();
         assert_eq!(v["nonce"], self.nonce);
         assert_eq!(v["identity"], self.workers[index].ready["identity"]);
         assert_eq!(v["supervisor"], self.supervisor_identity);
+        if !v["ledger"].is_null() {
+            let observed = common::read(&self.workers[index].dir.join("child-open.json")).unwrap();
+            assert_eq!(v["ledger"]["lookup_session_id"], observed["session_id"]);
+            assert_ne!(
+                v["ledger"]["lookup_session_id"],
+                v["ledger"]["external_session_id"]
+            );
+        }
         if let Some(p) = network.as_mut() {
             let drain_until = Instant::now() + Duration::from_secs(3);
             while !p.socket_eof {
@@ -307,24 +374,28 @@ impl Supervisor {
                 self.tick(drain_until);
             }
             assert!(p.tail_complete());
-            self.note(json!({"kind":"tls_post_cut_drain","peer_close_notify":p.peer_closed,"socket_eof":p.socket_eof,"frames":p.received}));
+            self.note(
+                json!({"kind":"tls_post_cut_drain","peer_close_notify":p.peer_closed,
+                "socket_eof":p.socket_eof,"frames":p.received}),
+            );
         }
-        let line = self
-            .log()
-            .lines()
-            .find(|l| l.contains(&reap_prefix))
-            .unwrap()
-            .to_owned();
-        self.note(json!({"kind":"production_reap_observed","worker":self.workers[index].ready["identity"],"native_exit":self.workers[index].process.status().unwrap(),"kill_used":self.workers[index].process.kill_used,"production_log":line,"control_stdin_open":self.stdin.is_some(),"stop_request_absent":!self.dir.join("stop.request.json").exists()}));
+        self.note(json!({"kind":"production_retirement_observed","disconnected_peer":peer.to_string(),
+            "worker":self.workers[index].ready["identity"],
+            "native_exit":self.workers[index].process.status().unwrap(),
+            "kill_used":self.workers[index].process.kill_used,"broker_status":broker_status,
+            "observer_frames":observer.received,"proof":"retained_process_handle_exit0_and_broker_available",
+            "control_stdin_open":self.stdin.is_some(),
+            "stop_request_absent":!self.dir.join("stop.request.json").exists()}));
+        // No worker is owned by this observer. Its own TLS close cannot serve as
+        // the input EOF being tested: child exit/availability were proven above.
+        observer.close_notify().unwrap();
+        let observer_deadline = Instant::now() + Duration::from_secs(3);
+        while !observer.socket_eof {
+            observer.drain_tail().unwrap();
+            self.tick(observer_deadline);
+        }
+        assert!(observer.tail_complete());
         v
-    }
-    pub fn log_raw_failure(&mut self) {
-        let log = self.log();
-        assert!(
-            log.contains("remote transport failed:"),
-            "raw TCP EOF must be production Failed, not clean"
-        );
-        self.note(json!({"kind":"raw_tcp_failure_classification","production_failed_logged":true}));
     }
     pub fn stop(mut self) {
         assert_eq!(self.workers.len(), 2);

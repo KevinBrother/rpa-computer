@@ -28,7 +28,9 @@ enum Cut {
 }
 fn open(p: &mut Peer) -> (String, String) {
     let init=p.request(1,"initialize",json!({"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"windows-tcp-disconnect","version":"1"}}));
-    assert_eq!(init["serverInfo"]["version"], common::version());
+    // Discovery is answered by the production broker; frozen fixture identity
+    // remains independently asserted in supervisor/worker evidence.
+    assert_eq!(init["serverInfo"]["version"], env!("CARGO_PKG_VERSION"));
     p.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
     let o = data(p.request(
         2,
@@ -48,14 +50,15 @@ fn scenario(label: &str, active: bool, cut: Cut, partial: bool) {
     let mut s = Supervisor::spawn(label);
     let mut p = s.connect(false);
     let peer_addr = p.socket.local_addr().unwrap();
-    let index = s.claim_worker();
     let (sid, base) = open(&mut p);
+    let index = s.claim_worker();
+    s.assert_session_mapping(index, &sid);
     s.note(json!({"kind":"open_observed","worker":index,"frames":p.received}));
     let mut press_qpc = None;
     if active {
         common::publish(
             &s.workers[index].dir.join("step-context.json"),
-            &json!({"session_id":sid,"request_id":"tcp-held"}),
+            &json!({"external_session_id":sid,"request_id":"tcp-held"}),
         )
         .unwrap();
         p.send(json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"computer_step","arguments":{"session_id":sid,"request_id":"tcp-held","based_on":base,"action":{"kind":"key_hold","key":"shift","duration_ms":5000}}}}));
@@ -70,11 +73,11 @@ fn scenario(label: &str, active: bool, cut: Cut, partial: bool) {
     }
     if partial {
         assert!(active && matches!(cut, Cut::Tls));
-        // Clean close appends '\n' in production host::bridge. This is invalid
-        // even with that newline, unlike a complete JSON object missing '\n'.
+        // An incomplete application frame must never dispatch. The manager
+        // discards the tail on disconnect; no newline synthesis is assumed.
         let tail=b"{\"jsonrpc\":\"2.0\",\"id\":99,\"method\":\"tools/call\",\"params\":{\"name\":\"computer_step\",\"arguments\":";
         p.send_bytes(tail).unwrap();
-        s.note(json!({"kind":"incomplete_json_tail_flushed","bytes":String::from_utf8_lossy(tail),"clean_close_appends_newline":true}));
+        s.note(json!({"kind":"incomplete_json_tail_flushed","bytes":String::from_utf8_lossy(tail),"incomplete_frame_must_not_dispatch":true}));
     }
     let cut_before = identity::qpc_ticks().unwrap();
     let mut network = match cut {
@@ -110,19 +113,17 @@ fn scenario(label: &str, active: bool, cut: Cut, partial: bool) {
     }
     let terminal = s.wait_reap(index, peer_addr, &mut network);
     oracle::disconnected(&terminal, active);
-    if matches!(cut, Cut::Raw) {
-        s.log_raw_failure();
-    }
     if let Some(p) = network.as_ref() {
         oracle::optional_tail(&p.received, active, partial);
     }
-    drop(network); // TLS socket retained through target cleanup/reap, no input EOF substitution.
-                   // Production listener admits only after reaping its first child. Only the
-                   // pre-auth busy handoff is retried; any authenticated/RPC failure is final.
+    drop(network); // TLS socket retained through cleanup/reap; no input EOF substitution.
+                   // A successful authenticated connection alone is no longer handoff proof:
+                   // wait_reap required exit0 AND broker available before this new open.
     let mut next = s.connect(true);
     let next_peer = next.socket.local_addr().unwrap();
-    let second = s.claim_worker();
     let (sid, _) = open(&mut next);
+    let second = s.claim_worker();
+    s.assert_session_mapping(second, &sid);
     let closed = data(next.request(
         4,
         "tools/call",

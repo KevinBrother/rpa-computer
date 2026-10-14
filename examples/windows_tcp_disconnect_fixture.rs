@@ -11,6 +11,9 @@ mod common;
 #[path = "windows_stdio_eof_fixture/identity.rs"]
 mod identity;
 #[cfg(windows)]
+#[path = "windows_tcp_disconnect_fixture/journal.rs"]
+mod journal;
+#[cfg(windows)]
 #[path = "windows_tcp_disconnect_fixture/supervisor.rs"]
 mod supervisor;
 #[cfg(windows)]

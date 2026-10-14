@@ -1,4 +1,4 @@
-use super::{backend, common, identity};
+use super::{backend, common, identity, journal};
 use rpa_computer::{
     backend::{Backend, BackendError, Capture, Geometry, InputEvent},
     mcp::{
@@ -84,24 +84,43 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         &dir.join("ready.json"),
         &json!({"nonce":nonce,"identity":id,"supervisor":supervisor,"exe":exe,"sha256":identity::executable_sha256(&exe)?,"version":common::version(),"build_id":common::BUILD_ID,"argv":["--mock-backend"],"backend":"Test","feedback":false,"cancelled":worker.cancel_handle().is_cancelled()}),
     )?;
-    let outcome = stdio::run(&worker, &common::version(), flag.clone());
+    let observed_open = Arc::new(Mutex::new(journal::OpenJournal::default()));
+    let outcome = stdio::run_with_reader(
+        &worker,
+        &common::version(),
+        flag.clone(),
+        journal::Input::new(std::io::stdin(), observed_open.clone()),
+        journal::Output::new(
+            std::io::stdout(),
+            observed_open.clone(),
+            dir.join("child-open.json"),
+        ),
+    );
     let cancelled = worker.cancel_handle().is_cancelled();
     let generation = worker.request_generation().current();
     let before = trace.lock().unwrap().json();
     let returned_qpc = identity::qpc_ticks()?;
-    // Read-only production ledger lookup after transport EOF. Identifiers came
-    // from the parent's actual open reply; this file cannot cancel/release input.
+    // Read-only production ledger lookup after transport EOF. The broker's
+    // external session is NOT a worker session: use only the passively observed
+    // actual child open response. Parent context provides the request ID only;
+    // neither observation nor context can cancel/release input.
     let context = dir.join("step-context.json");
     let lookup = if context.exists() {
         let v = common::read(&context)?;
+        let internal_session = observed_open
+            .lock()
+            .unwrap()
+            .session_id
+            .clone()
+            .ok_or("missing passively observed child session")?;
         let reply = worker
             .call_with_deadline(
                 "computer_get_step",
-                json!({"session_id":v["session_id"],"request_id":v["request_id"]}),
+                json!({"session_id":internal_session,"request_id":v["request_id"]}),
                 Duration::from_secs(1),
             )
             .map_err(|e| format!("ledger lookup: {e:?}"))?;
-        json!({"is_error":reply.is_error,"data":reply.data})
+        json!({"is_error":reply.is_error,"data":reply.data,"lookup_session_id":internal_session,"external_session_id":v["external_session_id"]})
     } else {
         serde_json::Value::Null
     };

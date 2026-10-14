@@ -1,11 +1,9 @@
 //! Direct TLS remote mode (`computer-host --remote-listen`,
 //! `computer-client --connect`).
 //!
-//! The host runs a TLS + token supervisor: after authentication it spawns
-//! the SAME executable in its existing stdio mode (a fresh owned child per
-//! connection, fully reaped before the next) and bridges bytes opaquely.
-//! The client bridges local stdio to the TLS session. See the design doc
-//! `docs/superpowers/specs/2026-09-28-direct-remote-computer-design.md`.
+//! The host authenticates bounded persistent client connections and admits a
+//! single task at computer_open. The central broker retains an owned stdio
+//! executor through verified cleanup and exit; idle discovery creates no worker.
 //!
 //! Wire protocol (application layer, inside TLS):
 //! 1. Client → host: `<token>\n` (first application bytes, after the TLS
@@ -16,6 +14,12 @@
 //! 3. Both directions: MCP JSON-RPC frames, newline-delimited. Bytes that
 //!    followed the token newline or the ack newline in the SAME TLS record
 //!    are preserved — TLS records are not application messages.
+
+mod authority;
+mod broker;
+mod connection;
+mod executor;
+mod protocol;
 
 pub mod client;
 pub mod host;

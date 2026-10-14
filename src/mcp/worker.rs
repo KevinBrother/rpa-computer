@@ -489,6 +489,12 @@ impl Worker {
         self.faulted.load(Ordering::SeqCst)
     }
 
+    /// Permanent desktop-feedback revocation, distinct from ordinary cancel or
+    /// clean session retirement. The process supervisor must require reconnect.
+    pub fn control_revoked(&self) -> bool {
+        self.feedback.as_ref().is_some_and(|f| f.is_terminated())
+    }
+
     /// True once the worker reports a live session (diagnostics only; never
     /// a substitute for runtime state).
     pub fn session_active(&self) -> bool {

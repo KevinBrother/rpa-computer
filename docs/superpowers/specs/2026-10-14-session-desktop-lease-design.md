@@ -1,7 +1,8 @@
 # Session-scoped desktop control lease
 
 Date: 2026-10-14
-Status: Proposed detail design; high-level direction approved, awaiting detail review.
+Status: Historical proposal, superseded for remote TLS by
+`2026-10-14-desktop-control-manager-design.md` after the approved scope discussion.
 
 ## Goal and scope
 

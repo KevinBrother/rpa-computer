@@ -112,7 +112,17 @@ release 目录**只含**编译产物、MCP 配置（引用外部凭据路径，T
       -verify_return_error -verify_hostname rpa-host.lan < /dev/null
   ```
   退出码 0 = 链与主机名均通过；换错误的 `--server-name` 必须失败。
-- **Token 错误 / 明文连接 / 多余并发连接**：host 一律拒绝并关闭，且未认证不创建任何桌面 worker；host 单控制连接。
+- **Token 错误 / 明文连接**：host 拒绝并关闭；未认证不创建桌面执行进程。
+- **多个客户端**：TLS 连接可同时保持，`computer_open` 才申请唯一桌面控制权。
+  其他客户端得到结构化 `lease_conflict`，连接不关闭；任务安全 close 后可以再次
+  open。没有自动等待/排队。连接总数受限（含认证中/退出中的连接），达到上限
+  时额外连接会关闭，不能把该资源上限与任务占用混为一谈。
+- **控制状态**：通过 `computer_describe.desktop_control` 查询本连接是否持有
+  控制权及 available/acquiring/owned/cleaning/quarantined 状态。未持有任务时
+  动态桌面能力尚未查询（null），无截图。cleaning 不可提前接管，quarantined
+  不会因稍后收到旧成功回复而自动解除。
+- **任务交接**：close 成功回复在本任务执行进程清理、退出确认后返回。pause
+  保留所有权。断连/到期触发清理，无法确认安全则隔离；旧 session_id 不可复用。
 - **CA/证书/Token 轮换**：完全手动——重新运行 `remote-credentials.py` 到新目录，重新分发 host/client 两侧文件，stop 再 start。旧凭据不自动失效，请删除旧目录。
 - **AUTH_OK 应用层 ack 由 Client 内部消费**：认证成功后 host 先回 `AUTH_OK`，Client 在 MCP 握手之前内部读取该校验——认证被拒则**非零退出**，且绝不把 ack 字节泄漏到 MCP stdout（stdout 只承载 MCP 帧）。
 - Client **不自动重连、不重放动作**（无法确认动作是否已执行）；连接失败非零退出并输出 stderr。
@@ -121,7 +131,7 @@ release 目录**只含**编译产物、MCP 配置（引用外部凭据路径，T
 
 - 单共享 Token、受控 LAN；不承诺多租户/公网抗 DoS；不自动改防火墙。
 - PowerShell 脚本与打包验证：2026-09-28 coordinator 已在 acer-win 上用 PowerShell `Parser.ParseFile` 对两个 ps1 做真实解析，**均通过**；本地打包测试更新为 **33 项：32 通过 1 跳过**（跳过项因本机无 pwsh）。真实 Windows 侧已单独实测 ParseFile、启动、provisional 清理与健康停止。
-- **Live 验证已完成（2026-09-28，acer-win）**：Interactive Task 运行在 Session1；Mac 原生 Rust `computer-client` 直连探测到的 Windows IP（8399 端口），**TLS 错误 CA / 错误主机名 / 错误 Token 以及并发 busy 均被拒绝**；取得 **2 张真实 960x540 截图**（来自两个不同会话，内容有区分）；客户端异常断开后 host 回收子进程，随后的全新会话正常工作。**未注入任何 GUI 输入**。
+- **历史 Live 验证（2026-09-28，旧单连接实现，不代表当前多客户端实现验收）**：Interactive Task 运行在 Session1；Mac 原生 Rust `computer-client` 直连探测到的 Windows IP（8399 端口），**TLS 错误 CA / 错误主机名 / 错误 Token 以及并发 busy 均被拒绝**；取得 **2 张真实 960x540 截图**（来自两个不同会话，内容有区分）；客户端异常断开后 host 回收子进程，随后的全新会话正常工作。**未注入任何 GUI 输入**。
 - 初次连接 TCP 超时，由**用户手动放行**网络访问后直连通过；agent **从未修改防火墙，也未使用 SSH 隧道**。DHCP 环境下 IP 变更后必须重新探测。
 - 本地真实 Claude CLI（配置模型未改动）仅调用 `computer_describe`，收到 `platform: windows`、`available: true`。这是 **agent/工具连通性**证据，**不代表**模型理解截图内容或计算器任务验收——此前的 GUI 门禁**仍未通过**。
 - 最终部署的 host/任务已停止，清理由 coordinator 检查（若 final-cleanup 日志尚缺，以"已停止"表述，验证跟踪见报告）。保留了二进制、证书文件与日志；**未修改任何持久化 Claude/全局配置**。测试部署位置 `C:\computer-direct-20260928-final`，本地无源码 client 包位于 `/private/tmp/computer-direct-client-20260928-final`（临时验证产物，非永久安装）。

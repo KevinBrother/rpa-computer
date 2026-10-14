@@ -14,7 +14,7 @@ use std::sync::Arc;
 use rpa_computer::feedback::FeedbackConfig;
 use rpa_computer::mcp::backend_factory::BackendFactory;
 use rpa_computer::mcp::hotkey;
-use rpa_computer::mcp::lock::{self, DesktopLock};
+use rpa_computer::mcp::lock;
 use rpa_computer::mcp::remote::host as remote_host;
 use rpa_computer::mcp::stdio;
 use rpa_computer::mcp::tcp;
@@ -304,12 +304,11 @@ fn serve(
     //    Contention yields a clean diagnostic; no input is ever injected.
     //    In explicit mock mode no real desktop input is possible, so the
     //    real writer lock / hotkey are skipped — and that is said out loud.
-    let desktop_lock: Option<DesktopLock> = if mock_backend {
+    if mock_backend {
         eprintln!(
             "[computer-host] MOCK BACKEND (--mock-backend): diagnostics only; \
              no real capture, no input injection, no desktop writer lock, no hotkey"
         );
-        None
     } else {
         match lock::acquire() {
             Ok(l) => {
@@ -317,7 +316,10 @@ fn serve(
                     "[computer-host] acquired desktop writer lock at {}",
                     l.path().display()
                 );
-                Some(l)
+                // Intentionally process-lifetime: neither normal return nor a
+                // panic may unlock while an abandoned native thread can inject.
+                // The OS closes this handle only when the process really exits.
+                std::mem::forget(l);
             }
             Err(e) => {
                 eprintln!("{{\"error\":{{\"code\":\"lease_conflict\",\"message\":\"{e}\"}}}}");
@@ -436,16 +438,24 @@ fn serve(
         (None, Some(_)) | (Some(_), None) => unreachable!("validated in parse"),
     };
 
-    // 6. Cleanup: cancel + runtime shutdown + lock release (Drop). The
+    // 6. Cleanup: cancel + runtime shutdown; lock release occurs at OS exit. The
     //    writer lock is held for the WHOLE process lifetime — even after a
     //    fault — so an abandoned native thread can never overlap with a new
     //    host acquiring the desktop.
     cancel.cancel();
     let shutdown = worker.shutdown();
-    drop(desktop_lock);
     eprintln!("[computer-host] stopped");
     if rpa_computer::mcp::worker::shutdown_is_quarantined(shutdown) {
         ExitCode::from(7)
+    } else if shutdown_flag.load(Ordering::SeqCst)
+        || hotkey_flag.load(Ordering::SeqCst)
+        || worker.control_revoked()
+    {
+        // Structured child-lifecycle status: native cleanup is confirmed, but
+        // local hotkey, signal, or desktop-feedback permanently revoked this
+        // connection. Broker-requested stdin EOF/close never sets this flag.
+        // Preserve this fact even if a failed open made the broker initiate EOF.
+        ExitCode::from(8)
     } else {
         code
     }

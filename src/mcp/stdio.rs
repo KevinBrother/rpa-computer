@@ -80,7 +80,13 @@ pub fn run(worker: &Worker, version: &str, shutdown_flag: Arc<AtomicBool>) -> St
 /// refusal, reader-side generation stamps + registration, validated direct
 /// cancel (cancelled/pause/close/EOF), control-slot EOF, shutdown-flag
 /// polling, fatal surfacing.
-pub(crate) fn run_with_reader<R: io::Read + Send + 'static, W: Write>(
+///
+/// Advanced transport/test-support entry point. Callers own the supplied streams
+/// and must preserve framing and EOF semantics; passive journaling wrappers may
+/// observe bytes but must not synthesize control or replace worker cancellation.
+/// Ordinary stdio hosts should use [`run`]. The input is moved to the production
+/// reader thread, so callers must arrange for blocked reads to receive real EOF.
+pub fn run_with_reader<R: io::Read + Send + 'static, W: Write>(
     worker: &Worker,
     version: &str,
     shutdown_flag: Arc<AtomicBool>,
