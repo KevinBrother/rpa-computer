@@ -172,11 +172,30 @@ fn ensure_keys_released_with(mut key_state: impl FnMut(i32) -> i16) -> Result<()
 }
 
 fn clipboard_sequence() -> Result<u32, BackendError> {
-    let sequence = unsafe { GetClipboardSequenceNumber() };
+    checked_clipboard_sequence(unsafe { GetClipboardSequenceNumber() })
+}
+
+fn checked_clipboard_sequence(sequence: u32) -> Result<u32, BackendError> {
     if sequence == 0 {
         return Err(error("cannot inspect clipboard sequence for paste"));
     }
     Ok(sequence)
+}
+
+// Zero can coexist with usable clipboard access. This raw baseline is only an
+// observation: successful OpenClipboard and the locked prewrite guards below
+// are still mandatory before any write. Postpublication checks remain strict.
+fn initial_clipboard_sequence(sequence: u32) -> u32 {
+    sequence
+}
+
+// Production calls this only inside publish_text's successfully opened lock,
+// before EmptyClipboard. It does not independently authorize clipboard writes.
+fn require_prewrite_sequence(expected: u32, actual: u32) -> Result<(), BackendError> {
+    if actual != expected {
+        return Err(error("paste clipboard sequence changed before write"));
+    }
+    Ok(())
 }
 
 fn encode_text(text: &str) -> Result<Vec<u16>, BackendError> {
@@ -353,7 +372,8 @@ pub(super) fn prepare(text: &str) -> Result<PreparedPaste, BackendError> {
         let utf16 = encode_text(text)?;
         let focus = capture_focus()?;
         ensure_keys_released()?;
-        Ok((utf16, focus, clipboard_sequence()?))
+        let original_sequence = initial_clipboard_sequence(unsafe { GetClipboardSequenceNumber() });
+        Ok((utf16, focus, original_sequence))
     })()
     .map_err(|e: BackendError| {
         BackendError::new(
@@ -366,7 +386,7 @@ pub(super) fn prepare(text: &str) -> Result<PreparedPaste, BackendError> {
     })?;
     let (owner, sequence) = publish_text(&utf16, || {
         verify_focus(focus, capture_focus()?)?;
-        require_sequence(original_sequence, clipboard_sequence()?)?;
+        require_prewrite_sequence(original_sequence, unsafe { GetClipboardSequenceNumber() })?;
         ensure_keys_released()
     })?;
     Ok(PreparedPaste {

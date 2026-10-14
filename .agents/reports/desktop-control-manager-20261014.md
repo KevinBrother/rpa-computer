@@ -1,7 +1,8 @@
 # Desktop control manager — implementation / verification log
 
 Status: phase-one implementation and Windows non-GUI regression complete.
-Native desktop/IME acceptance and replacement of the original deployed host remain pending.
+Native desktop ownership lifecycle passed on October14 after user login; see the follow-up below.
+Full-width IME/DingTalk acceptance and replacement of the original deployed host remain pending.
 
 ## Approved scope
 
@@ -227,3 +228,20 @@ Local frozen bundle: `.agents/runs/session-control-20261014/final-v2-artifacts/`
 Final source/Cargo hashes remain identical to source-freeze-v2.json. Scoped
 formatting and final git diff whitespace check pass. No commits, pushes,
 worktrees, global Claude settings changes, firewall edits or login/session changes.
+
+## October14 interactive follow-up after user login
+
+See `.agents/reports/control-gui-20261014.md` for preserved raw evidence.
+Actual CC+GLM native Windows lifecycle run passed conflict-with-live-transport,
+pause retaining ownership, resume invalidation, close/release, same-B-transport
+handoff and stale-A-close isolation (15 lifecycle calls). No GUI typing was used
+for that lifecycle proof.
+
+A real paste attempt found a separate clipboard prewrite-zero bug, repaired with
+a minimal locked-baseline policy change while retaining strict postpublication
+guards. Fresh Windows regression: library335 passed/0 failed/7 ignored and
+paste contract12 passed/0 failed. Four subsequent native GUI paste calls all
+delivered exactly the submitted text. Screenshot-only fixture task was1/4,
+because three model-submitted payloads misread punctuation/spacing. Do not count
+those as fixture passes. Full-width IME was not verified at Check; DingTalk was
+not operated. Original deployment unchanged; no commit/push.

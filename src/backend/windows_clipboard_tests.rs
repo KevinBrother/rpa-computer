@@ -98,6 +98,40 @@ fn external_modifier_and_v_guard_rejects_each_down_key() {
     ensure_keys_released_with(|_| 1).unwrap();
 }
 
+// Pure stage-policy regressions: no native clipboard, windows, or input calls.
+// Initial zero is not write permission: production must still acquire its real
+// clipboard lock before invoking the prewrite callback in publish_text.
+#[test]
+fn prewrite_initial_zero_baseline_is_observable() {
+    assert_eq!(initial_clipboard_sequence(0), 0);
+}
+
+#[test]
+fn prewrite_locked_unchanged_zero_baseline_is_accepted() {
+    require_prewrite_sequence(0, 0).unwrap();
+}
+
+#[test]
+fn prewrite_changed_baseline_is_rejected_including_zero_transitions() {
+    for (expected, actual) in [(0, 1), (1, 0), (41, 42)] {
+        assert!(require_prewrite_sequence(expected, actual).is_err());
+    }
+}
+
+#[test]
+fn prewrite_nonzero_baseline_policy_is_unchanged() {
+    assert_eq!(initial_clipboard_sequence(42), 42);
+    require_prewrite_sequence(42, 42).unwrap();
+}
+
+#[test]
+fn postpublish_zero_sequence_remains_unavailable() {
+    assert!(checked_clipboard_sequence(0).is_err());
+    assert!(require_sequence(0, 0).is_err());
+    assert!(require_sequence(42, 0).is_err());
+    assert_eq!(checked_clipboard_sequence(42).unwrap(), 42);
+}
+
 // Test-first contract for the reviewed finalization fix. Native clipboard
 // reads must be gated by owner equality while reopened/locked; this pure
 // state model must never authorize a new baseline from sequence alone.
