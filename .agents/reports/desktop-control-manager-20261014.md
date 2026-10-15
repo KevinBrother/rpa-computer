@@ -245,3 +245,15 @@ delivered exactly the submitted text. Screenshot-only fixture task was1/4,
 because three model-submitted payloads misread punctuation/spacing. Do not count
 those as fixture passes. Full-width IME was not verified at Check; DingTalk was
 not operated. Original deployment unchanged; no commit/push.
+
+## Later October14 completion of previously pending coverage
+
+See `.agents/reports/control-followup-20261014.md`: actual DingTalk self-chat
+explicit paste + one Enter send verified; all7 previously ignored library tests
+explicitly passed in their required Session0/Session1 contexts. New bounded
+fixture trace observed open=true/conversion0x9 before AND after WM_PASTE in all
+four cases, with exact submitted-text readback4/4 and no dropped trace samples.
+Check-time0x401 was a later state and did not represent paste-time state.
+Screenshot-only transcription is still not all green: new run2/4, with the two
+remaining model-submitted text errors preserved. Previous failures/history here
+are not overwritten. Original deployed host was not replaced.

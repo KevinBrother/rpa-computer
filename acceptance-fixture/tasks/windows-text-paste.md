@@ -48,6 +48,57 @@ codepoint diagnostics, the four samples, and single-line evidence serialization.
 An executable console target is intentional so compiler/self-test diagnostics
 are visible; the GUI itself is the owned WinForms window.
 
+## Observability/readability contracts and trace
+
+The six additional pure self-test groups cover explicit ambiguous-character
+escapes, payload roundtrip preservation, intact escape/surrogate token wrapping,
+bounded metadata entries and dropped counts, query exceptions that cannot skip
+modeled dispatch, and flush acknowledgment without resetting event sequence.
+The RED checkpoint was coordinator-observed; GREEN must be compiled and executed
+independently. All groups should pass with native exit 0; no author-run result is
+implied. Compile references and the single-source build command above are unchanged.
+
+The canonical display uses 18-point Consolas and measured token-safe wrapping.
+It explicitly escapes fullwidth colon, ASCII quotes/apostrophe/backtick, and
+spaces, preserving the expected UTF-16 sequence. Its visual lines concatenate
+without separators before decoding once. Valid surrogate pairs remain on one
+visual row. If an intact display cannot fit, it shows DISPLAY INCOMPLETE instead
+of silently truncating the authoritative representation; do not type or resize
+to work around this during acceptance. The original literal sample remains.
+
+The target observes only its own existing HWND at focus gain/loss, relevant
+Ctrl/Shift/Alt/Win/V key boundaries, and WM_PASTE. It samples before/after exactly
+one base dispatch, including ProcessCmdKey preprocessing because Ctrl+V may not
+expose WM_PASTE to the subclass. It adds no focus calls, setters, layout changes,
+clipboard calls, text reads, or composition queries. Acquisition/release of the
+current IMM context is scoped to each observation. Exceptions become unavailable
+metadata; no exception message is stored. A reentrant query is dropped explicitly.
+
+A fixed 512-entry buffer retains earliest events until successful flush; excess
+or reentrant events increment dropped without invoking another query. Sidecar I/O
+occurs only at existing Check/close boundaries, to:
+
+```text
+<evidence-file>.ime-trace.jsonl
+```
+
+It appends a batch header then buffered samples and clears only after successful
+append. A write failure disables later flushes (no retry) and reports only an
+exception type to stderr; text-match acceptance stays independent. Partial batches,
+missing traces, release failures, or dropped events limit IME conclusions. Do not
+read the sidecar/source/self-test output into the GUI operator's context.
+
+**Metadata schema:** batch rows contain `type=batch`, `flush` (Check/Close), UTC,
+Stopwatch `frequency`, `count`, and `dropped`. Sample rows contain `type=sample`,
+monotonic `seq`/`ticks`, zero-based `caseIndex`, `boundary`/`phase`, numeric `message`
+and whitelisted `virtualKey`, `commandKey` (preprocessing vs WndProc), input/focus/
+context handles, thread ID, `availability`, open/conversion/sentence state,
+`modifiersAvailable`, `modifierMask`, and `releaseFailed`. Mask bits: Ctrl=1,
+Shift=2, Alt=4, Win=8, V=16. It is the calling GUI thread's sampled keyboard state,
+not a global physical-key oracle; an unavailable mask must not be read as released.
+No expected/actual text, composition data, clipboard data, or general key stream
+is included. Handles/timing remain local operational metadata.
+
 ## Coordinator: separately authorized Windows GUI run
 
 Only perform this phase when running Windows acceptance, not while implementing
@@ -95,8 +146,11 @@ source, helper outputs, evidence content, or sample strings as extra context.
 > the four visible escape characters. Decode emoji surrogate escapes as the
 > displayed emoji. Preserve every space, case, punctuation mark and backslash;
 > do not append an extra final newline. The JSON string is authoritative if the
-> sample wraps visually or a tab's width is ambiguous. If text is unreadable,
-> resize only this fixture via MCP and take another screenshot before input.
+> sample wraps visually or a tab's width is ambiguous. Canonical visual wraps
+> add no characters: concatenate the displayed rows, then decode once. Use the
+> configured 1920x1080 screenshot output and a single client. Do not resize the
+> fixture or use taskbar controls. If the authoritative display is unreadable or
+> reports DISPLAY INCOMPLETE, stop and report the limitation rather than guess.
 >
 > Before entering each case, click **Enable IME Full Width** via MCP. Screenshot
 > and record the reported queried IME state, including unavailable/not-verified
@@ -106,7 +160,8 @@ source, helper outputs, evidence content, or sample strings as extra context.
 > never proof that full-width mode was enabled. Continue the paste checks and
 > report IME coverage separately.
 >
-> Focus the empty **paste target** and invoke exactly **one** MCP text-input
+> Enable already focuses the empty **paste target**: do not click it again.
+> Invoke exactly **one** MCP text-input
 > action for the whole case with explicit **`method: "paste"`**. Do not leave the
 > method unspecified, use native/auto typing, split multiline content into
 > multiple actions, manually send Enter/Tab, prepare the clipboard separately,
@@ -131,7 +186,7 @@ source, helper outputs, evidence content, or sample strings as extra context.
 ## Evidence and coordinator verdict
 
 Only the coordinator, **after the screenshot-only operator phase**, may read the
-JSONL file. Keep these responsibilities separate: the GUI operator must not use
+text-evidence JSONL and metadata-only IME sidecar. Keep these responsibilities separate: the GUI operator must not use
 evidence/source reads to discover or repair its input. Expected evidence:
 
 - Exactly four records in order: `chinese`, `mixed-ascii`, `emoji`, `multiline-tab`.
@@ -152,9 +207,14 @@ evidence/source reads to discover or repair its input. Expected evidence:
 
 Classify **text-paste correctness** separately from **IME full-width coverage**.
 Four first-attempt matches with durable records establish the former. The latter
-requires screenshots and check-time state showing queried open status plus
-`NATIVE | FULLSHAPE` bits; an absent/unsupported IMM context or a refused mode
-change leaves that coverage unverified. IMM state is API evidence, not a claim
+requires queried open status plus `NATIVE | FULLSHAPE` at the actual paste/key
+boundary, not merely immediately after Enable or after Check refocus. Prefer
+WM_PASTE before/after records when present; otherwise inspect V preprocessing/key
+boundaries with an available Ctrl modifier mask and correlate the first-attempt
+MCP action. Missing WM_PASTE alone is not proof no paste occurred. Check-time state
+remains useful but cannot establish when an intervening transition happened.
+Unavailable/unsupported contexts, missing relevant events, or dropped records leave
+coverage unverified rather than successful. IMM state is API evidence, not a claim
 about every modern TSF IME's behavior. The fixture attempts to restore the saved
 open/conversion/sentence state of the same TextBox context when closing; it never
 switches global keyboard layouts. No native baseline is included, avoiding

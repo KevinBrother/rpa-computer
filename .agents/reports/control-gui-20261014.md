@@ -209,3 +209,15 @@ stop script; instance record removed. Final bounded inventory returned no
 processes under the owned test root, no current host/fixture tasks, no listener
 on18413, and no instance record (`final-owned-inventory.json`, exit0).
 Evidence, original/fixed binaries and prior failed outcomes remain retained.
+
+## Later October14 completion of previously pending coverage
+
+See `.agents/reports/control-followup-20261014.md`: actual DingTalk self-chat
+explicit paste + one Enter send verified; all7 previously ignored library tests
+explicitly passed in their required Session0/Session1 contexts. New bounded
+fixture trace observed open=true/conversion0x9 before AND after WM_PASTE in all
+four cases, with exact submitted-text readback4/4 and no dropped trace samples.
+Check-time0x401 was a later state and did not represent paste-time state.
+Screenshot-only transcription is still not all green: new run2/4, with the two
+remaining model-submitted text errors preserved. Previous failures/history here
+are not overwritten. Original deployed host was not replaced.
