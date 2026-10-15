@@ -1,0 +1,8 @@
+*
+!Dockerfile
+!Dockerfile.build
+!session-env.sh
+!entrypoint.sh
+!healthcheck.sh
+!exec-session.sh
+!fixture.py
