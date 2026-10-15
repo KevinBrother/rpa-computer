@@ -3,6 +3,10 @@
 Status: follow-up execution complete. DingTalk self-chat input/send, seven explicit
 ignored cases and full-width IMM paste-boundary coverage obtained. Screenshot-only
 fixture transcription remains2/4, with both failures preserved and attributed below.
+Tool-layer submitted-text fidelity is4/4; model-generated argument errors are
+recorded separately and do not block this deterministic input acceptance.
+The separate eighth skipped case (1000-step registry contract) passed on October15;
+see windows-registry-20261015.md. Original deployment remains unchanged.
 
 Evidence: `.agents/runs/control-followup-20261014/`.
 Baseline HEAD externally changed to `670169b`; coordinator did not commit/push.

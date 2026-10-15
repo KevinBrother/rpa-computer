@@ -2,7 +2,10 @@
 
 Status: phase-one implementation and Windows non-GUI regression complete.
 Native desktop ownership lifecycle passed on October14 after user login; see the follow-up below.
-Full-width IME/DingTalk acceptance and replacement of the original deployed host remain pending.
+Full-width IME fixture and DingTalk input/send acceptance subsequently completed; see
+control-followup-20261014.md. All8 originally ignored cases now have explicit
+passing evidence across follow-ups (last case: windows-registry-20261015.md).
+Replacement of the original deployed host remains outside this test closeout.
 
 ## Approved scope
 

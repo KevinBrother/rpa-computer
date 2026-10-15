@@ -1,6 +1,9 @@
 # Windows live desktop acceptance — 2026-10-14
 
-Status: running; no GUI acceptance conclusion yet.
+Status: historical execution log, completed and superseded by
+control-followup-20261014.md for final native GUI/IME/input evidence and
+windows-registry-20261015.md for the final skipped-case closeout. Intermediate
+pending statements below are retained as chronological history.
 
 ## Authorization and isolation
 
