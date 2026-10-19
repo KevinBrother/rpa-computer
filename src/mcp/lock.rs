@@ -1,25 +1,13 @@
-//! Cross-process desktop writer lock.
+//! Cross-process desktop writer authority.
 //!
-//! Two independent `computer-host` processes in the same OS user session must
-//! never inject input concurrently. Mutual exclusion comes from an OS-level
-//! advisory lock (`flock` / `LockFileEx`) held on a STABLE rendezvous file:
-//!
-//! - The rendezvous file is NEVER unlinked while in use. Removing it after
-//!   unlock creates a classic inode race: process A unlocks and unlinks,
-//!   process B had opened the old inode and holds a lock on a file no longer
-//!   reachable, process C creates a fresh inode and locks it — two "owners".
-//!   Leaving the file in place is safe: the lock (not the file) is the
-//!   exclusion mechanism, and the OS releases it on process death.
-//! - The lock scope is derived from the NATIVE user identity (uid on Unix,
-//!   the `USERPROFILE` directory on Windows), never from attacker-mutable
-//!   `USER`/`USERNAME`/`TMPDIR` environment variables. Two hosts launched
-//!   with different env vars in the same desktop session still collide.
-//! - The rendezvous is created with owner-only permissions, and symbolic
-//!   links are refused (`O_NOFOLLOW` on Unix) so a hostile symlink planted in
-//!   a shared temp dir cannot redirect the lock onto a victim file.
-//!
-//! On lock contention the caller reports a clean `lease_conflict` diagnostic
-//! before any input is injected.
+//! Linux production uses one server-owned X11 selection across all screens,
+//! independent of UID, temporary directories and filesystem namespaces. It is
+//! cooperative exclusion, not protection against malicious X11 clients.
+//! Other platforms and explicit `acquire_at` callers retain the stable-file
+//! advisory lock. Rendezvous files are never unlinked while in use.
+
+#[cfg(target_os = "linux")]
+mod x11;
 
 use std::fs::{self, File, OpenOptions};
 use std::io;
@@ -29,7 +17,7 @@ use std::path::{Path, PathBuf};
 pub enum LockError {
     /// Another live host process holds the desktop writer lock.
     Contended,
-    /// Could not create/open the lock file at all.
+    /// Could not establish or verify desktop ownership (file or X server).
     Unavailable(String),
 }
 
@@ -45,27 +33,58 @@ impl std::fmt::Display for LockError {
     }
 }
 
-/// Held while the host owns the desktop writer role. Dropping closes the
-/// handle, which releases the OS lock; process death releases it even
-/// without Drop. The rendezvous FILE IS DELIBERATELY LEFT ON DISK.
+/// Held while the host owns the writer role. The host retains this for the
+/// whole process lifetime, including unknown/abandoned native calls.
 pub struct DesktopLock {
-    file: File,
-    path: PathBuf,
+    inner: LockKind,
+}
+enum LockKind {
+    File {
+        file: File,
+        path: PathBuf,
+    },
+    #[cfg(target_os = "linux")]
+    X11(x11::ServerLease),
 }
 
 impl DesktopLock {
-    /// Path of the underlying lock file (diagnostics only).
-    pub fn path(&self) -> &Path {
-        &self.path
+    /// File-backed locks only; X11 ownership has no filesystem rendezvous.
+    pub fn path(&self) -> Option<&Path> {
+        match &self.inner {
+            LockKind::File { path, .. } => Some(path),
+            #[cfg(target_os = "linux")]
+            LockKind::X11(_) => None,
+        }
+    }
+
+    pub fn diagnostic(&self) -> String {
+        match &self.inner {
+            LockKind::File { path, .. } => format!("file {}", path.display()),
+            #[cfg(target_os = "linux")]
+            LockKind::X11(lease) => lease.diagnostic(),
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn x11_lease(&self) -> Result<rpa_native_input::X11Lease, LockError> {
+        match &self.inner {
+            LockKind::X11(lease) => lease.token(),
+            LockKind::File { .. } => Err(LockError::Unavailable(
+                "a file lock cannot authorize X11 input".into(),
+            )),
+        }
     }
 }
 
 impl Drop for DesktopLock {
     fn drop(&mut self) {
-        // Explicit unlock for prompt release; closing the fd (File drop)
-        // would also release it. The file is NOT removed: unlinking a live
-        // rendezvous re-opens the inode-replacement race documented above.
-        unlock(&self.file);
+        // Never unlink the file: that would re-open the inode replacement
+        // race. X11's field Drop revokes the token and closes its authority.
+        match &self.inner {
+            LockKind::File { file, .. } => unlock(file),
+            #[cfg(target_os = "linux")]
+            LockKind::X11(_) => {}
+        }
     }
 }
 
@@ -170,14 +189,25 @@ pub fn acquire_at(path: &Path) -> Result<DesktopLock, LockError> {
     let mut f = &file;
     let _ = writeln!(f, "pid={}", std::process::id());
     Ok(DesktopLock {
-        file,
-        path: path.to_path_buf(),
+        inner: LockKind::File {
+            file,
+            path: path.to_path_buf(),
+        },
     })
 }
 
-/// Acquire the desktop writer lock at the default per-user path.
+/// Acquire production authority for the native desktop (X-server scoped on Linux).
 pub fn acquire() -> Result<DesktopLock, LockError> {
-    acquire_at(&default_lock_path())
+    #[cfg(target_os = "linux")]
+    {
+        x11::ServerLease::acquire().map(|lease| DesktopLock {
+            inner: LockKind::X11(lease),
+        })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        acquire_at(&default_lock_path())
+    }
 }
 
 /// Reject lock files whose permissions would let another local principal
@@ -357,6 +387,11 @@ mod tests {
         let path = test_path("contend");
         let _ = fs::remove_file(&path);
         let first = acquire_at(&path).expect("first acquire succeeds");
+        #[cfg(target_os = "linux")]
+        assert!(
+            first.x11_lease().is_err(),
+            "file API must not mint X11 authority"
+        );
         match acquire_at(&path) {
             Err(LockError::Contended) => {}
             other => panic!("expected contention, got {:?}", other.map(|_| ())),
@@ -442,3 +477,9 @@ mod tests {
         assert!(p.to_string_lossy().contains("computer-host-"));
     }
 }
+
+#[cfg(all(test, target_os = "linux"))]
+mod linux_regression_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+mod linux_protocol_tests;

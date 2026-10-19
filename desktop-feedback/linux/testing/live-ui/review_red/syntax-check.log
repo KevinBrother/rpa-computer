@@ -1,0 +1,7 @@
+Syntax/bytecode compilation only; no imports or tests. Python 3.14.0
+support.py: syntax OK; authored tests=0
+test_backpressure_red.py: syntax OK; authored tests=6
+test_ring_red.py: syntax OK; authored tests=5
+test_timestamps_red.py: syntax OK; authored tests=2
+Authored total=13; NOT RUN
+syntax_exit=0

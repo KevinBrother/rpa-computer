@@ -1,0 +1,6 @@
+Syntax compilation only: source compiled in memory; NO imports/test execution.
+COMPILE_OK desktop-feedback/linux/testing/live-ui/case.py
+COMPILE_OK desktop-feedback/linux/testing/live-ui/review_red/support.py
+COMPILE_OK desktop-feedback/linux/testing/live-ui/focus_red/focus_support.py
+COMPILE_OK desktop-feedback/linux/testing/live-ui/focus_red/test_focus_boundary.py
+AST-only test count: 13

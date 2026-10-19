@@ -2,39 +2,52 @@
 //! external binaries. Owns one X display connection; all X access is
 //! serialized through `&mut self` on the `Driver` trait.
 //!
-//! Requires the XTEST extension. Wayland sessions are rejected explicitly.
+//! Requires XTEST/XKB; native text requires XTEST 2.2 device events (never
+//! core-event fallback), with checked requests on the same borrowed XCB
+//! connection. Native text also requires XI2 and libXi per-device
+//! queries, plus libX11-xcb.so.1/libxcb for protocol-width mapping replies on
+//! the same Xlib connection (Xlib retains event ownership). Wayland sessions are rejected explicitly. The affected set is
+//! capped at 32 enabled key-capable devices; unknown topology, divergent key
+//! ranges and unsnapshotable affected devices fail closed before map writes.
 //!
-//! Text policy (honest first-release behavior): only characters whose keysym
-//! is already bound at the UNSHIFTED level (column 0) of the current keymap
-//! are injected, by clicking that stable keycode. Characters not so bound are
-//! rejected with `invalid_text` BEFORE any side effect. There is NO temporary
-//! `XChangeKeyboardMapping` remapping: a transient remap followed by an
-//! immediate restore cannot guarantee that every target client observed the
-//! mapping before the events, so such injection would be able to corrupt
-//! input silently. Unicode beyond the current layout is therefore UNSUPPORTED
-//! by this driver and explicitly reported as such — never pretended to work.
+//! Native text uses exact existing base-level bindings or stable per-session
+//! XKB mapping leases, one vacant non-modifier keycode per distinct scalar.
+//! Unicode/case/punctuation are represented without Shift chords or clipboard.
+//! Capacity, conflicting user modifier/group state and mapping ownership loss
+//! are explicit errors. Leases are never recycled to a different scalar until
+//! fallible cleanup verifies every affected device, including per-key repeat.
+//! Only compatible per-device vacant definitions are leased. Native acceptance is NOT application
+//! receipt. Cleanup can race a delayed client's mapping refresh.
 //!
-//! Known limits (see .agents/reports/native-input-platform-repair-20260929.md):
-//! - This driver does NOT install a process-global `XSetErrorHandler` /
-//!   IO-error handler (that slot is shared by the whole process, including
-//!   other Xlib users such as screenshot dependencies). Xlib's default
-//!   handlers therefore apply: an asynchronous X protocol error or a dead
-//!   display connection terminates the process, exactly as for any other
-//!   plain Xlib client.
-//! - `XSync` performs a blocking round trip with no timeout; connection
-//!   setup is likewise blocking. These are the potentially-blocking calls.
-//! - `XSync`'s Status return value is NOT used as an error indicator (its
-//!   contract is not a reliable per-call error signal); delivery errors
-//!   surface through Xlib's default handler per the limit above.
-//! - Keyboard mapping lookups consider only column 0 (unshifted level of the
-//!   first keyboard group). Characters bound only at shifted levels or in
-//!   other groups are rejected rather than guessed with a Shift press.
+//! Xlib retains its default process-global error/IO handlers; asynchronous X
+//! protocol errors or connection death can terminate the process. We do not
+//! override handlers shared with other Xlib users. Replies/readback validate
+//! normal operations; XSync's return is not a protocol-error signal. Connection
+//! setup and Xlib round trips are blocking, with no hard transport deadline.
+//! Server grabs cover bounded same-connection operations, never sleeps or waits
+//! for another client's acknowledgment and never an entire text string.
 
 use crate::{Axis, Button, Direction, Driver, InputError, Key, Result};
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::ffi::{c_int, c_uint, c_ulong, c_void};
+use std::rc::Rc;
 
+mod authority;
+mod definition;
+mod device_keymap;
+mod device_input;
+mod device_policy;
+mod devices;
+mod hierarchy;
+mod inventory;
+mod keyboard_set;
 mod keysym;
+mod map_request;
+mod native_text;
+mod text_policy;
+mod transient_button;
+mod xkb;
 
 use keysym::{KeyCode, KeySym};
 
@@ -148,15 +161,22 @@ pub(crate) struct Platform {
     max_keycode: KeyCode,
     /// Stable press/release keycode cache (see [`KeycodeCache`]).
     keycodes: KeycodeCache,
+    text_leases: Vec<native_text::NativeLease>,
+    device_lifetime: inventory::LifetimeFence,
+    hierarchy: hierarchy::HierarchyWatch,
+    transient_buttons: transient_button::TransientButtons,
+    pending_text_release: Option<native_text::PendingRelease>,
+    native_protocol: Option<device_input::Protocol>,
+    x11_lease: Option<crate::X11Lease>,
+    grab_depth: Rc<Cell<usize>>,
 }
 
 impl Platform {
     pub(crate) fn new() -> Result<Self> {
-        if std::env::var_os("WAYLAND_DISPLAY").is_some()
-            || std::env::var("XDG_SESSION_TYPE")
-                .map(|v| v.eq_ignore_ascii_case("wayland"))
-                .unwrap_or(false)
-        {
+        if text_policy::wayland_session(
+            std::env::var_os("WAYLAND_DISPLAY").as_deref(),
+            std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+        ) {
             return Err(err(
                 "unsupported_session",
                 "Wayland session detected; this driver requires X11 (XWayland is not validated)",
@@ -188,6 +208,10 @@ impl Platform {
                 "X server does not support the XTEST extension",
             ));
         }
+        if let Err(error) = xkb::require_extension(dpy) {
+            unsafe { XCloseDisplay(dpy) };
+            return Err(error);
+        }
         let mut min_keycode: c_int = 0;
         let mut max_keycode: c_int = 0;
         // SAFETY: dpy is live; out-params are valid locals. XDisplayKeycodes
@@ -201,13 +225,45 @@ impl Platform {
                 "XDisplayKeycodes returned an implausible keycode range",
             ));
         }
+        let grab_depth = Rc::new(Cell::new(0));
         Ok(Self {
             dpy,
             screen: unsafe { XDefaultScreen(dpy) },
             min_keycode: min_keycode as KeyCode,
             max_keycode: max_keycode as KeyCode,
             keycodes: KeycodeCache::new(),
+            text_leases: Vec::new(),
+            device_lifetime: inventory::LifetimeFence::default(),
+            hierarchy: hierarchy::HierarchyWatch::new(dpy, grab_depth.clone()),
+            transient_buttons: transient_button::TransientButtons::default(),
+            pending_text_release: None,
+            native_protocol: None,
+            x11_lease: None,
+            grab_depth,
         })
+    }
+
+    pub(crate) fn with_x11_lease(lease: crate::X11Lease) -> Result<Self> {
+        if lease.is_revoked() {
+            return Err(err(
+                "input_failed",
+                "X11 desktop writer lease is already revoked",
+            ));
+        }
+        let mut platform = Self::new()?;
+        platform.x11_lease = Some(lease);
+        {
+            let _guard = platform.begin_operation()?;
+        }
+        Ok(platform)
+    }
+
+    fn begin_operation(&self) -> Result<xkb::ServerGrab> {
+        let guard = xkb::ServerGrab::new(self.dpy, Rc::clone(&self.grab_depth));
+        if let Some(lease) = &self.x11_lease {
+            authority::verify(self.dpy, lease)?;
+        }
+        Ok(guard)
     }
 
     /// Flushes the output buffer and waits until the X server has processed
@@ -245,28 +301,31 @@ impl Platform {
         let mut modifiers = HashSet::new();
         // SAFETY: dpy is live; result freed via XFreeModifiermap.
         let modmap = unsafe { XGetModifierMapping(self.dpy) };
-        if !modmap.is_null() {
-            unsafe {
-                let slots = (*modmap).max_keypermod;
-                if slots > 0 && slots <= 64 {
-                    for i in 0..(8 * slots as usize) {
-                        let kc = *(*modmap).modifiermap.add(i);
-                        if kc != 0 {
-                            modifiers.insert(kc);
-                        }
+        if modmap.is_null() {
+            return Err(err(
+                "input_failed",
+                "XGetModifierMapping failed; cannot exclude modifier keys",
+            ));
+        }
+        unsafe {
+            let slots = (*modmap).max_keypermod;
+            if slots > 0 && slots <= 64 {
+                for i in 0..(8 * slots as usize) {
+                    let kc = *(*modmap).modifiermap.add(i);
+                    if kc != 0 {
+                        modifiers.insert(kc);
                     }
                 }
-                XFreeModifiermap(modmap);
             }
+            XFreeModifiermap(modmap);
         }
         Ok((map, per_code as usize, modifiers))
     }
 
     /// Resolves the keycode whose UNSHIFTED binding (column 0) is `keysym`.
-    /// Modifier-bound keycodes are never returned, and a keysym bound only at
-    /// a shifted level or another group is rejected rather than guessed.
-    /// `rejection_code` is the `InputError` code used when unbound (callers
-    /// map text lookups to `invalid_text`, key lookups to `invalid_key`).
+    /// Modifier-bound keycodes are allowed only for explicit physical modifier
+    /// intent. Shifted-only/other-group matches are rejected rather than guessed.
+    /// Native scalar text uses its separate safe mapping/lease policy.
     fn keycode_for_keysym(
         &mut self,
         keysym: KeySym,
@@ -274,13 +333,13 @@ impl Platform {
         rejection_code: &'static str,
     ) -> Result<KeyCode> {
         let (map, per_code, modifiers) = self.keymap_snapshot()?;
-        keysym::find_unshifted_keycode(&map, per_code, self.min_keycode, &modifiers, keysym)
+        keysym::find_physical_keycode(&map, per_code, self.min_keycode, &modifiers, keysym)
             .ok_or_else(|| {
                 err(
                     rejection_code,
                     format!(
-                        "keysym 0x{keysym:04X} is not bound at the unshifted level of any \
-                         non-modifier keycode ({context})"
+                        "keysym 0x{keysym:04X} has no safe physical unshifted binding \
+                         ({context})"
                     ),
                 )
             })
@@ -305,42 +364,52 @@ impl Platform {
         Ok(())
     }
 
-    /// Press + release of one keycode, with retry of a failed release so we
-    /// clean up our own partial transient event before reporting failure.
-    fn click_keycode(&mut self, keycode: KeyCode, context: &str) -> Result<()> {
-        self.fake_key(keycode, true, context)?;
-        if let Err(first) = self.fake_key(keycode, false, context) {
-            if let Err(second) = self.fake_key(keycode, false, context) {
-                return Err(err(
-                    first.code,
-                    format!("{first}; owned release retry also failed: {second}"),
-                ));
-            }
-        }
-        Ok(())
+    /// Real wheel dispatch uses the same injectable algorithm as portable RED.
+    fn click_button(&mut self, button: c_uint, context: &str) -> Result<()> {
+        let dpy = self.dpy;
+        self.transient_buttons.click(button, |id, press| {
+            Self::post_button(dpy, id, press, context)
+        })
     }
 
-    /// Press + release of one pointer button (wheel ticks), mirroring
-    /// `click_keycode` cleanup semantics: a failed release is retried and
-    /// both failures are reported, never silently dropped.
-    fn click_button(&mut self, button: c_uint, context: &str) -> Result<()> {
-        self.fake_button(button, true, context)?;
-        if let Err(first) = self.fake_button(button, false, context) {
-            if let Err(second) = self.fake_button(button, false, context) {
-                return Err(err(
-                    first.code,
-                    format!("{first}; owned release retry also failed: {second}"),
-                ));
-            }
+    fn cleanup_transient_buttons(&mut self) -> Result<()> {
+        if !self.transient_buttons.has_pending() {
+            return Ok(());
         }
-        Ok(())
+        let _guard = self.begin_operation()?;
+        let dpy = self.dpy;
+        self.transient_buttons
+            .cleanup(|id, press| Self::post_button(dpy, id, press, "owned wheel cleanup"))
+    }
+
+    fn cleanup_resources(&mut self) -> Result<()> {
+        let wheel = self.cleanup_transient_buttons();
+        let text = self.cleanup_native_text();
+        let failures = [wheel.err(), text.err()]
+            .into_iter()
+            .flatten()
+            .map(|error| error.to_string())
+            .collect::<Vec<_>>();
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(err("input_failed", failures.join("; ")))
+        }
     }
 
     fn fake_button(&mut self, button: c_uint, is_press: bool, context: &str) -> Result<()> {
+        Self::post_button(self.dpy, button, is_press, context)
+    }
+
+    fn post_button(
+        dpy: *mut XDisplay,
+        button: c_uint,
+        is_press: bool,
+        context: &str,
+    ) -> Result<()> {
         // SAFETY: dpy is live; XTestFakeButtonEvent is asynchronous and only
         // validates arguments, so its status is checked directly.
-        let status =
-            unsafe { XTestFakeButtonEvent(self.dpy, button, is_press as c_int, CURRENT_TIME) };
+        let status = unsafe { XTestFakeButtonEvent(dpy, button, is_press as c_int, CURRENT_TIME) };
         if status == 0 {
             return Err(err(
                 "input_failed",
@@ -357,6 +426,7 @@ impl Platform {
 
 impl Drop for Platform {
     fn drop(&mut self) {
+        let _ = self.cleanup_resources();
         // SAFETY: dpy was opened in new() and is closed exactly once here.
         unsafe { XCloseDisplay(self.dpy) };
     }
@@ -382,6 +452,7 @@ fn button_event_spec(
 
 impl Driver for Platform {
     fn move_mouse(&mut self, x: i32, y: i32) -> Result<()> {
+        let _guard = self.begin_operation()?;
         // SAFETY: dpy is live; XTestFakeMotionEvent is asynchronous and its
         // status is checked.
         let status = unsafe {
@@ -400,12 +471,14 @@ impl Driver for Platform {
         // emit the REAL atomic XTest event; the count is validated so an
         // invalid request never reports success or injects anything.
         let (button_id, is_press) = button_event_spec(button, direction, click_count)?;
+        let _guard = self.begin_operation()?;
         self.fake_button(button_id, is_press, &format!("{button:?} {direction:?}"))?;
         self.sync();
         Ok(())
     }
 
     fn key(&mut self, key: Key, direction: Direction) -> Result<()> {
+        let _guard = self.begin_operation()?;
         let context = format!("{key:?} {direction:?}");
         let keysym = keysym::key_to_keysym(&key).ok_or_else(|| {
             err(
@@ -437,47 +510,24 @@ impl Driver for Platform {
         }
         let button = keysym::wheel_button(axis, length > 0);
         for tick in 0..length.unsigned_abs() {
+            let _guard = self.begin_operation()?;
             self.click_button(button, &format!("scroll tick {tick}"))?;
+            self.sync();
         }
         self.sync();
         Ok(())
     }
 
-    fn text_scalar(&mut self, ch: char) -> Result<()> {
-        let context;
-        let keysym = match ch {
-            '\0' => {
-                return Err(err("invalid_text", "NUL is not a valid text scalar"));
-            }
-            '\n' | '\r' => {
-                // CRLF is normalized once by the caller; each of \n and \r
-                // produces exactly one Return click.
-                context = "text newline".to_string();
-                keysym::XK_RETURN
-            }
-            '\t' => {
-                context = "text tab".to_string();
-                keysym::XK_TAB
-            }
-            _ => {
-                let ks = keysym::unicode_to_keysym(ch).ok_or_else(|| {
-                    err(
-                        "invalid_text",
-                        format!("no X11 keysym encodes U+{:04X}", ch as u32),
-                    )
-                })?;
-                context = format!("text U+{:04X}", ch as u32);
-                ks
-            }
-        };
+    fn control_text_uses_scalar(&self) -> bool {
+        text_policy::control_text_uses_scalar()
+    }
 
-        // Resolve BEFORE any side effect: the click only happens on a stable,
-        // unshifted existing binding. Unmapped text is rejected up front —
-        // this driver never rewrites the keyboard mapping to fake support.
-        let keycode = self.keycode_for_keysym(keysym, &context, "invalid_text")?;
-        self.click_keycode(keycode, &context)?;
-        self.sync();
-        Ok(())
+    fn text_scalar(&mut self, ch: char) -> Result<()> {
+        self.inject_native_text(ch)
+    }
+
+    fn cleanup(&mut self) -> Result<()> {
+        self.cleanup_resources()
     }
 }
 

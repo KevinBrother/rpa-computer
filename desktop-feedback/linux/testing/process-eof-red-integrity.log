@@ -1,0 +1,38 @@
+UNCHANGED desktop-feedback/linux/.gitignore
+UNCHANGED desktop-feedback/linux/Cargo.lock
+UNCHANGED desktop-feedback/linux/Cargo.toml
+UNCHANGED desktop-feedback/linux/README.md
+UNCHANGED desktop-feedback/linux/examples/native_link_probe.rs
+UNCHANGED desktop-feedback/linux/src/bin/rpa-desktop-feedback-linux.rs
+UNCHANGED desktop-feedback/linux/src/geometry.rs
+UNCHANGED desktop-feedback/linux/src/ipc.rs
+UNCHANGED desktop-feedback/linux/src/lib.rs
+UNCHANGED desktop-feedback/linux/src/model.rs
+UNCHANGED desktop-feedback/linux/src/native_ui/lifecycle.rs
+CHANGED desktop-feedback/linux/src/native_ui/mod.rs
+UNCHANGED desktop-feedback/linux/src/native_ui/paint.rs
+CHANGED desktop-feedback/linux/src/native_ui/process.rs
+UNCHANGED desktop-feedback/linux/src/native_ui/transport.rs
+UNCHANGED desktop-feedback/linux/src/native_ui/x11/drawing.rs
+UNCHANGED desktop-feedback/linux/src/native_ui/x11/facts.rs
+UNCHANGED desktop-feedback/linux/src/native_ui/x11/mod.rs
+UNCHANGED desktop-feedback/linux/src/native_ui/x11/windows.rs
+UNCHANGED desktop-feedback/linux/testing/Dockerfile.native-ui-builder
+UNCHANGED desktop-feedback/linux/testing/NATIVE-UI-GREEN.md
+UNCHANGED desktop-feedback/linux/testing/NATIVE-UI-RED.md
+UNCHANGED desktop-feedback/linux/testing/native-ui-green.sha256
+UNCHANGED desktop-feedback/linux/testing/native-ui-red.sha256
+UNCHANGED desktop-feedback/linux/tests/codec_contract.rs
+UNCHANGED desktop-feedback/linux/tests/common/mod.rs
+UNCHANGED desktop-feedback/linux/tests/geometry.rs
+UNCHANGED desktop-feedback/linux/tests/ipc_input.rs
+UNCHANGED desktop-feedback/linux/tests/ipc_output.rs
+UNCHANGED desktop-feedback/linux/tests/model.rs
+UNCHANGED desktop-feedback/linux/tests/native_ui_contract.rs
+UNCHANGED desktop-feedback/linux/tests/native_ui_policy.rs
+UNCHANGED desktop-feedback/linux/tests/native_ui_support/mod.rs
+UNCHANGED desktop-feedback/linux/tests/native_ui_transport.rs
+Only existing mod.rs and process.rs changed; all original tests/support, core, lifecycle, transport, adapters, manifest and lock byte-identical.
+Frozen shared protocol subtree also byte-identical (read-only comparison).
+native_ui_process_completion.rs: 12 new assertions
+native_ui_startup_eof.rs: 16 new assertions

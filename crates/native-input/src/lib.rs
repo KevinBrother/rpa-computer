@@ -15,7 +15,8 @@
 //!   mapping and best-effort release semantics.
 //!
 //! Host integration note (documented single-authority decision): the host
-//! runtime (`rpa-computer`) uses [`native_driver`] through its OWN existing
+//! runtime (`rpa-computer`) uses [`native_driver_with_x11_lease`] on Linux
+//! (and [`native_driver`] elsewhere) through its OWN existing
 //! state machine (`backend::dispatch_core::BackendCore`) and deliberately
 //! does NOT wrap the driver in [`Input`], so exactly one component in the
 //! process tracks held keys/buttons. [`Input`] remains the higher-level API
@@ -23,6 +24,11 @@
 
 mod session;
 mod types;
+mod x11_lease;
+pub use x11_lease::{X11Lease, X11_LEASE_NONCE_PROPERTY, X11_LEASE_SELECTION};
+
+#[cfg(test)]
+mod x11_lease_tests;
 
 // Compile the actual SendInput planner's pure tests on non-Windows hosts
 // too; no Win32 calls, platform initialization or desktop input are involved.
@@ -30,6 +36,42 @@ mod types;
 #[path = "windows/builder.rs"]
 #[allow(dead_code)]
 mod windows_builder_tests;
+
+// Linux text policy is pure Rust: exercise the same lease/guard logic on
+// other hosts without compiling or linking X11/XTest FFI.
+#[cfg(all(test, not(target_os = "linux")))]
+#[path = "linux_x11/text_policy.rs"]
+#[allow(dead_code)]
+mod linux_x11_text_policy;
+
+#[cfg(all(test, not(target_os = "linux")))]
+#[path = "linux_x11/keysym.rs"]
+#[allow(dead_code)]
+mod linux_x11_keysyms;
+
+#[cfg(all(test, not(target_os = "linux")))]
+#[path = "linux_x11/definition.rs"]
+#[allow(dead_code)]
+mod linux_x11_definition;
+#[cfg(all(test, not(target_os = "linux")))]
+#[path = "linux_x11/device_policy.rs"]
+#[allow(dead_code)]
+mod linux_x11_device_policy;
+
+#[cfg(all(test, not(target_os = "linux")))]
+#[path = "linux_x11/transient_button.rs"]
+#[allow(dead_code)]
+mod linux_x11_transient_button;
+
+#[cfg(all(test, not(target_os = "linux")))]
+#[path = "linux_x11/map_request.rs"]
+#[allow(dead_code)]
+mod linux_x11_map_request;
+
+#[cfg(all(test, not(target_os = "linux")))]
+#[path = "linux_x11/inventory.rs"]
+#[allow(dead_code)]
+mod linux_x11_inventory;
 
 #[cfg(target_os = "linux")]
 mod linux_x11;
@@ -57,4 +99,19 @@ pub fn native_driver() -> Result<Box<dyn Driver>> {
         "unsupported_session",
         format!("unsupported target OS: {}", std::env::consts::OS),
     ));
+}
+
+/// Construct a driver bound to the host's established X11 desktop lease.
+/// Never falls back to an unleased driver. Other platforms reject this factory.
+pub fn native_driver_with_x11_lease(lease: X11Lease) -> Result<Box<dyn Driver>> {
+    #[cfg(target_os = "linux")]
+    return Ok(Box::new(linux_x11::Platform::with_x11_lease(lease)?));
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = lease;
+        Err(InputError::new(
+            "unsupported_session",
+            "X11 lease factory requires Linux/X11",
+        ))
+    }
 }

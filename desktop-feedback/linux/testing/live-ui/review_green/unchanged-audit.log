@@ -1,0 +1,15 @@
+.agents/runs/linux-parity-20261015/renderer-process-eof-green-1-SHA256SUMS: 66/66 unchanged
+desktop-feedback/linux/testing/live-ui/review_red/review-red.sha256: 7/7 unchanged
+Baseline93 shared changed files=7
+desktop-feedback/linux/testing/live-ui/README.md
+desktop-feedback/linux/testing/live-ui/case.py
+desktop-feedback/linux/testing/live-ui/cases_shutdown.py
+desktop-feedback/linux/testing/live-ui/cases_ui.py
+desktop-feedback/linux/testing/live-ui/ipc.py
+desktop-feedback/linux/testing/live-ui/observer/src/observe.rs
+desktop-feedback/linux/testing/live-ui/observer/src/pixels.rs
+Original tests/manifests/locks selected=27 unchanged
+review-red tests/support/docs/logs unchanged; original32 and all13 assertions preserved
+audit_exit=0
+renderer-live-ui-qualification-1: historical directory 93/93 unchanged; archive SHA256=acec9ac700ee97991aa78c189ca129dd966db00971e052cdd821aa88a67f087c
+renderer-live-ui-review-red-1: historical directory 101/101 unchanged; archive SHA256=c69c211f23a3141e0cb47039d8ec58623498ae07889e7826e6723846ebac8a87

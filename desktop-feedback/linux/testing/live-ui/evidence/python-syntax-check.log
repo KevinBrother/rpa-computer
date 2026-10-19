@@ -1,0 +1,15 @@
+Syntax-only, no imports/test collection/test execution. Python 3.14.0
+case.py: syntax OK
+cases_shutdown.py: syntax OK
+cases_ui.py: syntax OK
+ipc.py: syntax OK
+owned.py: syntax OK
+rules.py: syntax OK
+run.py: syntax OK
+tests/test_acceptance.py: syntax OK ; 8 authored tests
+tests/test_resources.py: syntax OK ; 5 authored tests
+tests/test_rules.py: syntax OK ; 4 authored tests
+tests/test_wire.py: syntax OK ; 10 authored tests
+wire.py: syntax OK
+Python authored unit test count: 27 ; NOT RUN
+syntax_exit=0

@@ -19,3 +19,7 @@ windows = { version = "0.58", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_HiDpi",
 ] }
+
+# Public protocol-width XI replies on the native driver's existing Xlib connection.
+[target.'cfg(target_os = "linux")'.dependencies]
+xcb = { version = "=1.7.1", features = ["xinput", "xtest", "xkb"] }

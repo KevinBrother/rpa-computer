@@ -1,0 +1,14 @@
+     Locking 15 packages to latest compatible versions
+   Compiling memchr v2.8.3
+   Compiling libc v0.2.177
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+    Checking bitflags v2.13.2
+    Checking itoa v1.0.18
+   Compiling quick-xml v0.41.0
+   Compiling xcb v1.7.1
+    Checking rpa-feedback-live-observer v0.1.0 (/Volumes/doc/workspace/datagrand/rpa/rpa-computer/desktop-feedback/linux/testing/live-ui/observer)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.90s
+
+compile_exit=0

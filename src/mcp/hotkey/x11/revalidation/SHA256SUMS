@@ -1,0 +1,12 @@
+3c4eb189d6d1b52f14f003a4b2d893f1eac51c321cd401d4a059879ee7e0b728  src/mcp/hotkey/x11.rs
+2768ac7a10d92e0a55048c640bd0180bbf4abfb5fa0000aa7b42a8ae1c905baa  src/mcp/hotkey/x11/revalidation/RED.md
+59c52d2aa5bf51b8492b582fe697bcfb21dbc104d34bc4b707e41e90923a3a2f  src/mcp/hotkey/x11/revalidation/fixture.rs
+ae21c1d0b648cb2b4c8da1c615a2afcf2aee93595d29f06f9e83500988cc5f38  src/mcp/hotkey/x11/revalidation/live.rs
+5b9f9617d9cfaaa6f5d5b25d7681835ceb6a24f54abe284f770ac868e406d234  src/mcp/hotkey/x11/revalidation/mod.rs
+5bf34ce7255105a2452174c66dd83abebfff59abbdf6305a62500824e2934df2  src/mcp/hotkey/x11/revalidation/tests.rs
+15e886a8c037236e0f167e290cd63f3481f739c6e42d19d30fdfbd49a4a50bf6  src/mcp/hotkey/x11/semantic_image.rs
+10cbe760f4098d6aed121762e656d308f138837696b69ac8d02769c74be07a28  src/mcp/hotkey/x11/xkb_aux_wire/mod.rs
+655ac69ee34792fd36510f91b62ba2c7e5a0e762939c2225f9972b7093f146fa  src/mcp/hotkey/x11/xkb_aux_wire/tests.rs
+c63789cf41cabc0ea0070c72aec0c4f092bdafb66a15a40c059a2c94b825a481  src/mcp/hotkey/x11/xkb_map.rs
+73cb95eacbb9488c15ba6f7195f517100abe0050b973b8cbfd2f3f8a42e833bf  src/mcp/hotkey/x11/xkb_wire/model.rs
+8a69c87d502af47ffe712c173dd63655590adf28c96d73fd380e16fabb7f7f7f  src/mcp/hotkey/x11_plan.rs

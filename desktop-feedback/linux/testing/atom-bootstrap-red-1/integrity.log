@@ -1,0 +1,7 @@
+READ-ONLY integrity comparison; no tests executed.
+Old66 mutable-tree differences: ['desktop-feedback/linux/src/native_ui/x11/mod.rs']
+Old tests/support byte-identical: 16/16
+Historical66 mismatches: []
+Historical archive SHA256: 0796ba52582752bedbbc7446f669d6ddaa327c9270951c441d5b570eea57a7e6
+Manifest/lock/shared-protocol/old test assertions unchanged.
+Historical UI107 vs mutable tree differences (only product extraction): ['desktop-feedback/linux/src/native_ui/x11/mod.rs']

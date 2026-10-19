@@ -1,0 +1,6 @@
+No tests executed. Read-only hash/content verification.
+Original73 differences: ['desktop-feedback/linux/src/native_ui/x11/atoms.rs']
+Exact product diff: only_if_exists true->false plus two comments; other bytes unchanged.
+Original4/117 tests/support unchanged: 17/17
+Historical RED archive: 73/73 entries match original manifest; archive SHA unchanged.
+Original66 archive SHA: 0796ba52582752bedbbc7446f669d6ddaa327c9270951c441d5b570eea57a7e6

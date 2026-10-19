@@ -304,25 +304,50 @@ fn serve(
     //    Contention yields a clean diagnostic; no input is ever injected.
     //    In explicit mock mode no real desktop input is possible, so the
     //    real writer lock / hotkey are skipped — and that is said out loud.
-    if mock_backend {
+    let factory = if mock_backend {
         eprintln!(
             "[computer-host] MOCK BACKEND (--mock-backend): diagnostics only; \
              no real capture, no input injection, no desktop writer lock, no hotkey"
         );
+        BackendFactory::Mock
     } else {
         match lock::acquire() {
             Ok(l) => {
                 eprintln!(
-                    "[computer-host] acquired desktop writer lock at {}",
-                    l.path().display()
+                    "[computer-host] acquired desktop writer authority: {}",
+                    l.diagnostic()
                 );
-                // Intentionally process-lifetime: neither normal return nor a
-                // panic may unlock while an abandoned native thread can inject.
-                // The OS closes this handle only when the process really exits.
+                #[cfg(target_os = "linux")]
+                let lease = match l.x11_lease() {
+                    Ok(lease) => lease,
+                    Err(e) => {
+                        eprintln!(
+                            "{}",
+                            serde_json::json!({"error": {
+                                "code": "lease_unavailable", "message": e.to_string()
+                            }})
+                        );
+                        return ExitCode::from(3);
+                    }
+                };
+                // Neither return nor unwinding may release authority while
+                // an abandoned native thread could still be running. X11's
+                // watcher and the native token both enforce permanent loss.
                 std::mem::forget(l);
+                BackendFactory::Desktop {
+                    #[cfg(target_os = "linux")]
+                    lease,
+                }
             }
             Err(e) => {
-                eprintln!("{{\"error\":{{\"code\":\"lease_conflict\",\"message\":\"{e}\"}}}}");
+                let code = match &e {
+                    lock::LockError::Contended => "lease_conflict",
+                    lock::LockError::Unavailable(_) => "lease_unavailable",
+                };
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"error": {"code": code, "message": e.to_string()}})
+                );
                 return ExitCode::from(3);
             }
         }
@@ -332,24 +357,31 @@ fn serve(
     let shutdown_flag = Arc::new(AtomicBool::new(false));
     install_signal_handlers(&shutdown_flag);
 
-    // 3. Runtime worker with the selected backend, constructed on its
-    //    thread. Default is the real native desktop; mock is explicit-only.
-    let factory = if mock_backend {
-        BackendFactory::Mock
-    } else {
-        BackendFactory::Desktop
+    // 3. Construct backend resources on the native thread. On Linux the
+    // factory carries verified X11 authority, never an environment token.
+
+    let worker = match Worker::start_with_feedback_shutdown(
+        factory,
+        feedback,
+        shutdown_flag.clone(),
+    ) {
+        Ok(w) => w,
+        Err(e) => {
+            let no_input = e.initialization_no_input();
+            eprintln!(
+                "{}",
+                serde_json::json!({"error": {
+                    "code": if no_input { "initialization_failed" } else { "initialization_unknown" },
+                    "message": e.to_string(),
+                    "input_outcome": if no_input { "not_started" } else { "unknown" },
+                    "cleanup_outcome": if no_input { "not_needed" } else { "unknown" }
+                }})
+            );
+            // Only a positively confirmed setup failure can avoid remote
+            // quarantine. Timeout, panic, or ambiguous teardown stay 4.
+            return ExitCode::from(if no_input { 9 } else { 4 });
+        }
     };
-    let worker =
-        match Worker::start_with_feedback_shutdown(factory, feedback, shutdown_flag.clone()) {
-            Ok(w) => w,
-            Err(e) => {
-                eprintln!(
-                    "[computer-host] backend initialization failed: {e}. \
-                 Check screen-recording/accessibility permissions."
-                );
-                return ExitCode::from(4);
-            }
-        };
     let cancel = worker.cancel_handle();
 
     // 4. Emergency hotkey: best effort, honestly reported. The hotkey sets
@@ -632,7 +664,11 @@ fn print_describe(mock_backend: bool, feedback: FeedbackConfig) {
             "desktop_writer_lock": if mock_backend {
                 "not held (mock backend mode; no real input possible)"
             } else {
-                "OS-level exclusive lock (flock / LockFileEx), held for the whole process lifetime"
+                if cfg!(target_os = "linux") {
+                    "X11 server-global cooperative selection lease; process-lifetime connection, permanent revocation and per-input verification"
+                } else {
+                    "OS-level exclusive lock (flock / LockFileEx), held for the whole process lifetime"
+                }
             },
             "session_lifetime_seconds": rpa_computer::mcp::worker::SESSION_LIFETIME.as_secs(),
             "emergency_hotkey": hotkey_probe,

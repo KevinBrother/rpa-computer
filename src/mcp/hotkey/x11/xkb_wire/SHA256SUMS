@@ -1,0 +1,16 @@
+a1fd2945e5e334b73d4f288f852169b3c1c78e3fbab0f4b478946b979926c526  src/mcp/hotkey/x11.rs
+3c650e00399b758363589b00965fcdf87d2165a7ffc6f7522bda0a671b2621a0  src/mcp/hotkey/x11/xkb_map.rs
+3f3ececf21e2885fb1c7bc55c92fdadc5362e79ce790d1b25c2c8e4b80a4f4a9  src/mcp/hotkey/x11/xkb_map_tests.rs
+ceaaf004f65e52bfb31b9ea06782524a3d302dfa2af51f66eddd8e8d199ec97b  src/mcp/hotkey/x11/xkb_wire/mod.rs
+2a2d9ed5e774a36db539f8fdfde1853d9f7ac6ab68775bd55ae01b95e46a94eb  src/mcp/hotkey/x11/xkb_wire/model.rs
+d663c4a2e91a2de972184acaa791c530b3866df23342abeb54a221768f699e72  src/mcp/hotkey/x11/xkb_wire/tests.rs
+f93452d7ce1d617b4824acb6ee06a0c3b10ba401e9cefcdb4dbf0f3a8b5087b9  src/mcp/hotkey/x11/xkb_wire/review_fixture.rs
+e6ce988bb67ab7d5ad47c0bdebef740bf7c46ede05861083da88dad8ae695f4d  src/mcp/hotkey/x11/xkb_wire/review_tests.rs
+69db48585935cf4f88d35cd79ceeaf70a068fd67bc009a260b6334bd8f7305f7  src/mcp/hotkey/x11/xkb_wire/RED.md
+6b0a0e0e732b38e7bf42a36c1846adac749a1c40870bfc236e4e0f32c42cda04  src/mcp/hotkey/x11/xkb_wire/REVIEW_RED.md
+6f09a3f248b6754ecf161926f3174db1d16a09fd4c9a079c705d5893ef87a19d  src/mcp/hotkey/x11/xkb_wire/xcb-1.7.1-decoder-evidence.tar.gz
+904c4277d991b676aaec35afbd25ca157a0110b2a234bb182688e431172307fc  src/mcp/hotkey/x11/xkb_wire/cursor.rs
+adeff4b26f3fe6c115103aa77f55792fcdd87c86d74ee08b5b737b24b8f645df  src/mcp/hotkey/x11/xkb_wire/header.rs
+935c911fbba334a682f19f7faa7ac90b7bafffcb3022ef342c1db66aaee84c44  src/mcp/hotkey/x11/xkb_wire/components.rs
+326536d8d8635662a8e6c3643e8a0c147aaf51058cf4744cf8bf80cce45efa63  src/mcp/hotkey/x11/xkb_wire/parser.rs
+b8a4dfa02557e1a5de091d7df86d1855f2a78f4a0febd75ff41cf92826f5973d  src/mcp/hotkey/x11/xkb_wire/GREEN.md

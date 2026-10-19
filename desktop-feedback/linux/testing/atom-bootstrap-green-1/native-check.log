@@ -1,0 +1,15 @@
+    Checking rpa-desktop-feedback-linux v0.1.0 (/Volumes/doc/workspace/datagrand/rpa/rpa-computer/desktop-feedback/linux)
+warning: associated function `intern_all` is never used
+  --> tests/../src/native_ui/x11/atoms.rs:65:12
+   |
+64 | impl Atoms {
+   | ---------- associated function in this implementation
+65 |     pub fn intern_all(connection: &xcb::Connection) -> xcb::Result<Self> {
+   |            ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `rpa-desktop-feedback-linux` (test "native_ui_atoms") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.06s
+
+COMPILE_ONLY_RC=0

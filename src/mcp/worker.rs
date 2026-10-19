@@ -89,11 +89,18 @@ const COMPLETION_QUEUE: usize = 4;
 /// Upper bound for the protocol-visible confirmation that the runtime
 /// shutdown completed. Exceeding it makes the diagnostic `shutdown_unknown`.
 pub const MAX_SHUTDOWN_CONFIRM: Duration = Duration::from_secs(15);
+/// Native/display cold startup budget. Tests inject shorter deadlines; they
+/// must not force a desktop cold start to fit a unit-test-sized timeout.
+pub const INITIALIZATION_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkerError {
     /// Could not construct the backend inside the worker thread.
     BackendUnavailable { code: String, message: String },
+    /// Initialization was interrupted, timed out, or panicked. A constructor
+    /// may still be running; no client work may follow it, and cleanup is NOT
+    /// proven. Never classify this as a clean/no-input setup failure.
+    InitializationUncertain { code: &'static str, message: String },
     /// Worker thread died or channel broke.
     Dead,
 }
@@ -104,8 +111,22 @@ impl std::fmt::Display for WorkerError {
             WorkerError::BackendUnavailable { code, message } => {
                 write!(f, "backend unavailable ({code}): {message}")
             }
+            WorkerError::InitializationUncertain { code, message } => {
+                write!(
+                    f,
+                    "initialization uncertain ({code}): {message}; cleanup unknown"
+                )
+            }
             WorkerError::Dead => write!(f, "runtime worker is not running"),
         }
+    }
+}
+
+impl WorkerError {
+    /// Only a completed setup failure, before any runtime work was admitted,
+    /// authorizes the dedicated pre-ready no-grant process exit.
+    pub fn initialization_no_input(&self) -> bool {
+        matches!(self, Self::BackendUnavailable { .. })
     }
 }
 
@@ -557,6 +578,7 @@ impl Drop for Worker {
 /// Shared state owned by (or mirrored into) the coordinator thread. Grouped
 /// so the thread entry point stays small and each field's role is named.
 struct CoordShared {
+    init_deadline: Instant,
     /// Cancel flag shared with the native runtime and the I/O side.
     cancel: Arc<AtomicBool>,
     /// Stop epochs: stale queued open/resume are refused, fresh ones pass.
@@ -578,10 +600,11 @@ fn coordinator_main(
     factory: BackendFactory,
     rx: Receiver<Command>,
     ctrl_rx: Receiver<Control>,
-    init_tx: Sender<Result<(), BackendError>>,
+    init_tx: Sender<Result<(), WorkerError>>,
     shared: CoordShared,
 ) {
     let CoordShared {
+        init_deadline,
         cancel,
         generation,
         session_started,
@@ -618,7 +641,7 @@ fn coordinator_main(
     let mut native_join = match native_join {
         Ok(j) => Some(j),
         Err(_) => {
-            let _ = init_tx.send(Err(BackendError {
+            let _ = init_tx.send(Err(WorkerError::BackendUnavailable {
                 code: "worker_spawn_failed".into(),
                 message: "cannot spawn native worker thread".into(),
             }));
@@ -626,30 +649,43 @@ fn coordinator_main(
         }
     };
 
-    // Forward native init to the starter.
-    match native_init_rx.recv() {
-        Ok(Ok(())) => {
-            if init_tx.send(Ok(())).is_err() {
-                return;
-            }
+    // An expired constructor can remain on its native thread, but the work
+    // sender/initialization receiver are closed before reporting failure.
+    // It can never consume a late queued request. Do not join a stuck thread.
+    let initialized = native::await_initialization(
+        native_init_rx,
+        &mut native_join,
+        &ctrl_rx,
+        &cancel,
+        init_deadline,
+    );
+    if initialized.is_err() || cancel.load(Ordering::SeqCst) {
+        generation.bump();
+        cancel.store(true, Ordering::SeqCst);
+        let error = initialized.err().unwrap_or_else(|| {
+            native::init_uncertain(
+                "initialization_cancelled",
+                "stop arrived at the readiness boundary",
+            )
+        });
+        if let Ok(mut status) = shutdown_status.lock() {
+            *status = Some(if error.initialization_no_input() {
+                ShutdownStatus::NotNeeded
+            } else {
+                ShutdownStatus::Unknown
+            });
         }
-        Ok(Err(e)) => {
-            let _ = init_tx.send(Err(e));
-            if let Some(j) = native_join.take() {
-                let _ = j.join();
-            }
-            return;
+        drop(work_tx);
+        let _ = init_tx.send(Err(error));
+        return;
+    }
+    if init_tx.send(Ok(())).is_err() {
+        generation.bump();
+        cancel.store(true, Ordering::SeqCst);
+        if let Ok(mut status) = shutdown_status.lock() {
+            *status = Some(ShutdownStatus::Unknown);
         }
-        Err(_) => {
-            let _ = init_tx.send(Err(BackendError {
-                code: "worker_died".into(),
-                message: "native worker died during init".into(),
-            }));
-            if let Some(j) = native_join.take() {
-                let _ = j.join();
-            }
-            return;
-        }
+        return; // starter abandoned init; never dispatch the ingress backlog
     }
 
     let mut native_busy = false;

@@ -707,6 +707,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "windows 0.58.0",
+ "xcb",
 ]
 
 [[package]]
@@ -726,6 +727,7 @@ name = "rpa-native-input"
 version = "0.1.0"
 dependencies = [
  "windows 0.58.0",
+ "xcb",
 ]
 
 [[package]]

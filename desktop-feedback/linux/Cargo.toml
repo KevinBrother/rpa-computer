@@ -1,0 +1,31 @@
+[package]
+name = "rpa-desktop-feedback-linux"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+publish = false
+description = "Optional native X11 feedback renderer; capture exclusion unsupported"
+license = "MIT"
+
+[workspace]
+resolver = "3"
+
+[features]
+default = []
+# Explicitly opt in to the Linux native executable; no Host auto-enablement.
+native-ui = ["dep:xcb", "dep:cairo-rs", "dep:pango", "dep:pangocairo", "dep:libc"]
+
+[dependencies]
+rpa-desktop-feedback = { path = "../../crates/desktop-feedback" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+xcb = { version = "=1.7.1", features = ["randr", "shape", "render", "xfixes"], optional = true }
+cairo-rs = { version = "=0.21.2", optional = true }
+pango = { version = "=0.21.2", optional = true }
+pangocairo = { version = "=0.21.2", optional = true }
+libc = { version = "=0.2.177", optional = true }
+
+[[bin]]
+name = "rpa-desktop-feedback-linux"
+path = "src/bin/rpa-desktop-feedback-linux.rs"
+required-features = ["native-ui"]

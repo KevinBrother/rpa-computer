@@ -89,25 +89,20 @@ pub fn character_to_keysym(c: char) -> Option<KeySym> {
     }
 }
 
-/// Maps a Unicode scalar value to the X11 keysym encoding it, if one exists.
-///
-/// - U+0020..=U+007E and U+00A0..=U+00FF map to the codepoint itself.
-/// - Codepoints >= 0x100 map to 0x01000000 + codepoint (keysymdef.h Unicode
-///   encoding), which covers up to 0x1FFFFF.
-/// - NUL, control characters, and the undefined Latin-1 gap (0x80..=0x9F)
-///   have no keysym.
-pub fn unicode_to_keysym(c: char) -> Option<KeySym> {
-    let cp = c as u32;
-    if cp == 0 {
-        return None;
+// Retain the legacy encoder regression cases against the production policy,
+// but do not carry two independent Unicode encoders in the shipped driver.
+#[cfg(test)]
+fn unicode_to_keysym(c: char) -> Option<KeySym> {
+    #[cfg(target_os = "linux")]
+    use super::text_policy;
+    #[cfg(not(target_os = "linux"))]
+    use crate::linux_x11_text_policy as text_policy;
+
+    if matches!(c, '\n' | '\r' | '\t') {
+        None // Legacy encoder excluded controls, including Return/Tab.
+    } else {
+        text_policy::native_keysym(c).ok().map(|symbol| symbol as KeySym)
     }
-    if (0x20..=0x7E).contains(&cp) || (0xA0..=0xFF).contains(&cp) {
-        return Some(cp as KeySym);
-    }
-    if (0x100..=0x1F_FFFF).contains(&cp) {
-        return Some(0x0100_0000 + cp as KeySym);
-    }
-    None
 }
 
 /// X11 wheel button numbers. Positive scroll length means RIGHT (horizontal)
@@ -165,6 +160,24 @@ pub fn find_unshifted_keycode(
         }
     }
     None
+}
+
+/// Physical modifier intent may resolve its own modifier-bound keycode.
+/// Ordinary characters/named keys retain the text-safe exclusion rule; a
+/// character mapped onto a modifier key must never turn into an accidental
+/// modifier press. Exact unshifted matching still applies in either case.
+pub fn find_physical_keycode(
+    keymap: &[KeySym],
+    per_code: usize,
+    first_keycode: KeyCode,
+    modifier_keycodes: &HashSet<KeyCode>,
+    keysym: KeySym,
+) -> Option<KeyCode> {
+    if matches!(keysym, XK_CONTROL_L | XK_SHIFT_L | XK_ALT_L | XK_SUPER_L) {
+        find_unshifted_keycode(keymap, per_code, first_keycode, &HashSet::new(), keysym)
+    } else {
+        find_unshifted_keycode(keymap, per_code, first_keycode, modifier_keycodes, keysym)
+    }
 }
 
 #[cfg(test)]
@@ -289,9 +302,13 @@ mod tests {
 
     #[test]
     fn unshifted_lookup_rejects_bad_geometry() {
-        let map = vec![0u64; 5];
+        let map = vec![0 as KeySym; 5];
         let mods: HashSet<KeyCode> = HashSet::new();
         assert_eq!(find_unshifted_keycode(&map, 0, 8, &mods, 1), None);
         assert_eq!(find_unshifted_keycode(&map, 2, 8, &mods, 1), None);
     }
 }
+
+#[cfg(test)]
+#[path = "key_planner_tests.rs"]
+mod key_planner_tests;

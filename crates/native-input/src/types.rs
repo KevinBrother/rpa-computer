@@ -134,6 +134,21 @@ pub fn is_valid_click_count(click_count: u8) -> bool {
 /// - No screenshots, no sleeps, no clipboard, no global key release inside
 ///   scalar injection.
 pub trait Driver {
+    /// Finish this session's native resources after the caller has attempted
+    /// its tracked key/button releases. Called even with no tracked items.
+    /// Failure must retain pending cleanup state for retry; success must leave
+    /// the driver usable for a fresh session, not close the native device.
+    /// This is a server/device cleanup boundary, not application receipt.
+    fn cleanup(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Whether Return/Tab text must use the driver's scalar safety path.
+    /// False preserves explicit-key clicks on platforms without that need.
+    fn control_text_uses_scalar(&self) -> bool {
+        false
+    }
+
     fn move_mouse(&mut self, x: i32, y: i32) -> Result<()>;
     /// One atomic button press or release carrying the native click-state of
     /// THIS press/up pair (`click_count`, valid 1..=3, see

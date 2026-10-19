@@ -5,11 +5,16 @@
 **/*.rs.bk
 .DS_Store
 
-# Multi-agent run transcripts and captured screenshots are sensitive /
-# machine-generated and must never be committed. Planning, contract, review
-# and report Markdown under .agents/ stays tracked.
+# Multi-agent run transcripts, captured screenshots, and per-run reports are
+# sensitive / machine-generated and must never be committed. Only planning,
+# contract, and review Markdown under .agents/ (CONTRACT.md, README.md,
+# plans/, artifacts/ sources) stays tracked.
 .agents/runs/
+.agents/reports/
 **/captures/
+
+# Editor state
+.cursor/
 
 # Python helper caches
 __pycache__/
@@ -19,3 +24,7 @@ __pycache__/
 # Native acceptance-fixture build products (compiled by an independent
 # worker); fixture source stays tracked, binaries/objects do not.
 acceptance-fixture/build/
+
+# Complied fixture binaries inside committed .app bundles are build products,
+# not source; Info.plist and other bundle metadata stay tracked.
+.agents/artifacts/**/*.app/Contents/MacOS/

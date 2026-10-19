@@ -59,6 +59,88 @@ pub(super) struct WorkItem {
 /// control work must ALWAYS run.
 pub(super) const CONTROL_GEN: u64 = u64::MAX;
 
+/// Bounded initialization handshake. Success is readiness, not a lease grant.
+/// A backend error is a no-input setup failure ONLY once the native thread has
+/// exited normally. A panic/stalled destructor cannot be promoted to that proof.
+pub(super) fn await_initialization(
+    init_rx: Receiver<Result<(), BackendError>>,
+    native_join: &mut Option<std::thread::JoinHandle<()>>,
+    ctrl_rx: &Receiver<super::Control>,
+    cancel: &AtomicBool,
+    deadline: Instant,
+) -> Result<(), super::WorkerError> {
+    let interrupted = || {
+        cancel.load(Ordering::SeqCst)
+            || !matches!(
+                ctrl_rx.try_recv(),
+                Err(std::sync::mpsc::TryRecvError::Empty)
+            )
+    };
+    loop {
+        if interrupted() {
+            return Err(init_uncertain(
+                "initialization_cancelled",
+                "stopped during native setup",
+            ));
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(init_uncertain(
+                "initialization_timeout",
+                "native setup exceeded its deadline",
+            ));
+        }
+        match init_rx.recv_timeout(remaining.min(super::WATCHDOG_POLL)) {
+            Ok(Ok(())) => {
+                if interrupted() || Instant::now() >= deadline {
+                    return Err(init_uncertain(
+                        "initialization_cancelled",
+                        "readiness arrived after stop/deadline",
+                    ));
+                }
+                return Ok(());
+            }
+            Ok(Err(error)) => {
+                // Error publication can race destructors on the native thread.
+                // Bound their completion too; do not blindly join after Err.
+                while native_join.as_ref().is_some_and(|j| !j.is_finished()) {
+                    if interrupted() || Instant::now() >= deadline {
+                        return Err(init_uncertain(
+                            "initialization_cleanup_unknown",
+                            "native setup failed but its thread did not retire",
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                if native_join.take().is_some_and(|j| j.join().is_err()) {
+                    return Err(init_uncertain(
+                        "initialization_panicked",
+                        "native setup thread panicked",
+                    ));
+                }
+                return Err(super::WorkerError::BackendUnavailable {
+                    code: error.code,
+                    message: error.message,
+                });
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(init_uncertain(
+                    "initialization_disconnected",
+                    "native setup ended without a readiness result",
+                ));
+            }
+        }
+    }
+}
+
+pub(super) fn init_uncertain(code: &'static str, message: &str) -> super::WorkerError {
+    super::WorkerError::InitializationUncertain {
+        code,
+        message: message.into(),
+    }
+}
+
 /// Native thread entry point: constructs and owns backend + runtime; every
 /// native call happens here so OS resources never cross threads.
 pub(super) fn native_main(
@@ -71,8 +153,23 @@ pub(super) fn native_main(
     generation: RequestGeneration,
     feedback: Option<crate::feedback::FeedbackHandle>,
 ) {
+    if cancel.load(Ordering::SeqCst) {
+        return; // startup was abandoned before this thread was scheduled
+    }
     let backend: Box<dyn Backend> = match factory {
-        BackendFactory::Desktop => match DesktopBackend::new() {
+        BackendFactory::Desktop {
+            #[cfg(target_os = "linux")]
+            lease,
+        } => match {
+            #[cfg(target_os = "linux")]
+            {
+                DesktopBackend::new_with_lease(lease)
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                DesktopBackend::new()
+            }
+        } {
             Ok(b) => Box::new(b),
             Err(e) => {
                 let _ = init_tx.send(Err(e));
@@ -91,6 +188,11 @@ pub(super) fn native_main(
             }
         }
     };
+    // The constructor may return after its caller timed out or stopped.
+    // Never publish readiness or construct a usable runtime in that case.
+    if cancel.load(Ordering::SeqCst) {
+        return;
+    }
     let mut runtime = match &feedback {
         Some(f) => Runtime::new_with_feedback(backend, Arc::clone(&cancel), f.clone()),
         None => Runtime::new(backend, Arc::clone(&cancel)),
@@ -426,3 +528,8 @@ mod feedback_tests {
         native.join().unwrap();
     }
 }
+
+#[cfg(test)]
+mod init_regression_tests;
+#[cfg(test)]
+mod outer_init_regression_tests;

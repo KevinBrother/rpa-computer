@@ -17,8 +17,9 @@
 //! - **Text**: per Unicode scalar. NUL is rejected before ANY dispatch. CRLF
 //!   is normalized once (a `"\r\n"` pair produces exactly ONE Return click);
 //!   each remaining `'\n'`/`'\r'` produces ONE Return click and `'\t'` ONE
-//!   Tab click — through the same held-state machine as explicit keys. Every
-//!   other scalar goes to the native text path. Native Text is never clipboard.
+//!   Tab click. Matching preexisting holds are rejected. Opted-in drivers use
+//!   their scalar safety path; others retain tracked explicit-key clicks.
+//!   Every other scalar uses native text. Native Text is never clipboard.
 //! - **TextPaste**: whole-text validation and held-input rejection precede
 //!   explicit clipboard preparation, a last-moment guard, and tracked Ctrl+V.
 //!   Partial chord failures remain owned for the existing release_all path.
@@ -113,13 +114,26 @@ impl<I: NativeInput> BackendCore<I> {
     }
 
     /// Inject one text scalar: `'\n'`/`'\r'` → ONE Return click, `'\t'` →
-    /// ONE Tab click, everything else → native scalar text path.
+    /// ONE Tab click. Opted-in drivers enforce their scalar safety path;
+    /// matching preexisting holds are never consumed by text.
     fn inject_text_scalar(&mut self, ch: char) -> Result<(), BackendError> {
-        match ch {
-            '\n' | '\r' => self.click_key(Key::Return),
-            '\t' => self.click_key(Key::Tab),
-            _ => self.input.text_scalar(ch),
+        let control = match ch {
+            '\n' | '\r' => Some(Key::Return),
+            '\t' => Some(Key::Tab),
+            _ => None,
+        };
+        if let Some(key) = control {
+            if self.held.contains(&HeldItem::Key(keys::ParsedKey::Named(key))) {
+                return Err(BackendError::new(
+                    "input_failed",
+                    format!("native text would consume an existing {} hold", key.name()),
+                ));
+            }
+            if !self.input.control_text_uses_scalar() {
+                return self.click_key(key);
+            }
         }
+        self.input.text_scalar(ch)
     }
 
     fn paste_text(&mut self, text: &str) -> Result<(), BackendError> {
@@ -269,13 +283,18 @@ impl<I: NativeInput> BackendCore<I> {
                 }
             }
         }
+        // Native scalar releases and mapping leases are not represented in
+        // the wrapper's held set. Always attempt the fallible resource seam.
+        if let Err(error) = self.input.cleanup() {
+            failures.push(format!("native cleanup: {}", error.message));
+        }
         if failures.is_empty() {
             Ok(())
         } else {
             Err(BackendError::new(
                 "input_failed",
                 format!(
-                    "release_all: {} item(s) failed to release (still tracked, will be retried): {}",
+                    "release_all: {} cleanup operation(s) failed (unresolved state retained for retry): {}",
                     failures.len(),
                     failures.join("; ")
                 ),
@@ -286,27 +305,17 @@ impl<I: NativeInput> BackendCore<I> {
 
 impl<I: NativeInput> Drop for BackendCore<I> {
     fn drop(&mut self) {
-        // Best-effort, intentionally silent: errors are only reportable
-        // through the explicit `release_all` path. Explicit cleanup
-        // correctness must never be inferred from any driver-side drop
-        // behavior — it does not cover mouse buttons and its outcome is not
-        // observable.
-        let mut buttons: Vec<rpa_native_input::Button> =
-            self.held_buttons.keys().copied().collect();
-        buttons.sort_by_key(|b| format!("{b:?}"));
-        for button in buttons {
-            let _ = self.release_item(HeldItem::Button(button));
-        }
-        let mut items: Vec<HeldItem> = self.held.iter().copied().collect();
-        items.sort_by_key(|i| i.sort_key());
-        for item in items {
-            let _ = self.release_item(item);
-        }
-        self.held.clear();
-        self.held_buttons.clear();
+        // Best-effort only. Observable cleanup outcomes come from release_all;
+        // do not infer success from destruction. Failed native resources remain
+        // owned by the driver for its final best-effort retry.
+        let _ = self.release_all();
     }
 }
 
 #[cfg(test)]
 #[path = "text_paste_tests.rs"]
 mod text_paste_tests;
+
+#[cfg(test)]
+#[path = "dispatch_control_text_tests.rs"]
+mod control_text_tests;

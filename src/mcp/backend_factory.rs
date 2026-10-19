@@ -10,7 +10,10 @@ use crate::backend::{Backend, BackendError};
 
 pub enum BackendFactory {
     /// Real native desktop backend (default and only production mode).
-    Desktop,
+    Desktop {
+        #[cfg(target_os = "linux")]
+        lease: rpa_native_input::X11Lease,
+    },
     /// Explicit `--mock-backend` diagnostic mode: in-memory fake desktop,
     /// no real lock/hotkey/input. Activated ONLY by the CLI flag parsed in
     /// `computer-host.rs`; never a fallback from native errors.
@@ -22,7 +25,7 @@ pub enum BackendFactory {
 impl std::fmt::Debug for BackendFactory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BackendFactory::Desktop => write!(f, "BackendFactory::Desktop"),
+            BackendFactory::Desktop { .. } => write!(f, "BackendFactory::Desktop"),
             BackendFactory::Mock => write!(f, "BackendFactory::Mock"),
             BackendFactory::Test(_) => write!(f, "BackendFactory::Test(..)"),
         }

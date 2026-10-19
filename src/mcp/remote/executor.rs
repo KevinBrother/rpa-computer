@@ -1,5 +1,6 @@
 //! Owned stdio process and bounded asynchronous pipe I/O.
-//! Only a successful exit is cleanup evidence. Killing is containment, not cleanup.
+//! Successful exit is cleanup evidence; dedicated pre-ready statuses prove
+//! no input grant was made. Killing or uncertain init is never cleanup proof.
 use crate::mcp::{jsonrpc, worker::Worker};
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Write};
@@ -38,6 +39,26 @@ mod tests {
         child.test_exit(3);
         assert_eq!(child.poll_exit(), Some(Retirement::NoGrant));
     }
+    // Exit 9 is reserved for a positively identified no-input setup failure.
+    // Exit 4 remains ambiguous; deadline/panic/cleanup failure must not use 9.
+    #[test]
+    fn pre_ready_no_input_setup_failure_is_not_unknown_cleanup() {
+        assert_eq!(classify_exit(Some(9), false, false), Retirement::NoGrant);
+        assert_eq!(classify_exit(Some(9), true, false), Retirement::Unknown);
+        assert_eq!(classify_exit(Some(9), false, true), Retirement::Unknown);
+        assert_eq!(classify_exit(Some(4), false, false), Retirement::Unknown);
+        assert_eq!(classify_exit(None, false, false), Retirement::Unknown);
+    }
+
+    #[test]
+    fn pre_ready_no_input_failure_survives_initializer_broken_pipe() {
+        let (mut child, _events, _writes) = Executor::test_pair();
+        child.ready = false;
+        child.broken.store(true, Ordering::SeqCst);
+        child.test_exit(9);
+        assert_eq!(child.poll_exit(), Some(Retirement::NoGrant));
+    }
+
     #[test]
     fn read_failure_or_helper_failure_is_sticky_despite_zero_exit() {
         for helper_failure in [false, true] {
@@ -105,7 +126,7 @@ fn classify_exit(code: Option<i32>, ready: bool, forced: bool) -> Retirement {
         Retirement::Unknown
     } else if code == Some(0) {
         Retirement::Clean
-    } else if code == Some(3) && !ready {
+    } else if matches!(code, Some(3 | 9)) && !ready {
         Retirement::NoGrant
     } else if code == Some(8) {
         Retirement::Revoked
@@ -320,7 +341,8 @@ impl Executor {
                 self.uncertain |= panicked;
                 let preliminary =
                     classify_exit(status.code(), self.ready, self.forced || self.uncertain);
-                // Exit 3 is emitted only before worker creation. Its initializer
+                // Exit 3 (lease refusal) and 9 (confirmed no-input setup failure)
+                // are pre-ready only. Their initializer
                 // write may race the process exit: broken pipe cannot turn that
                 // proven non-grant into an unknown cleanup outcome.
                 let result = if preliminary == Retirement::NoGrant {

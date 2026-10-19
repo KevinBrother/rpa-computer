@@ -1,0 +1,5 @@
+b65c22a2f2f0a61bd417df5416586b45bf34958a950b40f488db9c9aa7f61b13  src/mcp/hotkey/x11.rs
+6a4c17dac152697b56e5ce829e290d4ab437b4140bf9aae66e76cb76e3c45fca  src/mcp/hotkey/x11/xkb_events.rs
+3a6373fff8e490c57a1bfefef60eccc4fe4248ae6a132bef0ba30886a4c5aae9  src/mcp/hotkey/x11/candidate_gate/mod.rs
+30833220811f7bf5a0a7d6eb49bd0b3b3d5775b511a8aa9c0c799f1abf352498  src/mcp/hotkey/x11/candidate_gate/tests.rs
+e798393088444144bdd4f32dd272b64d11f4d4f89abf369efc63072581427eb1  src/mcp/hotkey/x11/candidate_gate/RED.md

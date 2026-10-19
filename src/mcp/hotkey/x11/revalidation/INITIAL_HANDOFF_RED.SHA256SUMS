@@ -1,0 +1,5 @@
+7c4ad2df43265ca96234ab9ecf2a921033182d3ed9fe7f0e3b2b48e94f483420  src/mcp/hotkey/x11.rs
+b9666bc3570ac8d1ca041d8a42bf9d0de50e26c656d3c77eb6c8306672e64614  src/mcp/hotkey/x11/revalidation/INITIAL_HANDOFF_RED.md
+5710e6f4adbc8e957659ea8703da25f1052671dda1f6dc1e71ec4b225d544b53  src/mcp/hotkey/x11/revalidation/initial_handoff.rs
+6613e5959a91769e032c9a5ec5c81106533cb71d607b5d0db82d27b87da4322f  src/mcp/hotkey/x11/revalidation/initial_handoff_tests.rs
+a963c3bbac10aa063f3364588b70d37e4651d51852bf29b78cfa4c80d590ba2d  src/mcp/hotkey/x11/revalidation/mod.rs

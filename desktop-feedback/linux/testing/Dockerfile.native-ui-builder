@@ -1,0 +1,16 @@
+# Test-only additive builder. Never replaces the existing builder/runtime image.
+# Build/run only by the independent coordinator; not executed by this lane.
+FROM rpa-linux-xvfb-builder:local
+
+USER root
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       pkg-config \
+       libcairo2-dev \
+       libpango1.0-dev \
+       libglib2.0-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Base image must already provide Rust 1.89, C linker, and libxcb1-dev.
+# No CMD/ENTRYPOINT, compositor, font install, DISPLAY override, or runtime change.
+# Native UI dependencies are enabled only by an explicit cargo --features native-ui.

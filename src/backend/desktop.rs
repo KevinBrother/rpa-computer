@@ -12,7 +12,7 @@
 //! decision and is unit-tested here so the lifecycle split is pinned by
 //! backend-owned regression evidence.
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 use super::capture::{self, TargetScreen};
 use super::dispatch::{BackendCore, DriverInput};
 use super::{Backend, BackendError, Capture, Geometry, InputEvent};
@@ -37,6 +37,8 @@ pub struct DesktopBackend {
     core: BackendCore<DriverInput>,
     #[cfg(target_os = "windows")]
     display: super::display::DisplayProvider<rpa_windows_display::GdiProvider>,
+    #[cfg(target_os = "linux")]
+    display: super::display::DisplayProvider<super::linux_display::X11Provider>,
 }
 
 impl DesktopBackend {
@@ -47,28 +49,53 @@ impl DesktopBackend {
     /// - Windows: the process is Per-Monitor-V2 DPI aware (attempted and
     ///   verified; failure is an error, not silently ignored).
     pub fn new() -> Result<Self, BackendError> {
+        #[cfg(target_os = "linux")]
+        {
+            Err(BackendError::new(
+                "desktop_lease_required",
+                "Linux desktop backend requires new_with_lease; unleased construction is disabled",
+            ))
+        }
+        #[cfg(not(target_os = "linux"))]
+        Self::initialize(|| super::platform::create_driver().map(DriverInput::new))
+    }
+
+    /// Host-owned Linux desktop authority. No MCP dependency or environment
+    /// token, and no alternate unleased runtime path.
+    #[cfg(target_os = "linux")]
+    pub fn new_with_lease(lease: rpa_native_input::X11Lease) -> Result<Self, BackendError> {
+        Self::initialize(move || {
+            let driver = super::platform::create_driver(lease.clone())?;
+            Ok(DriverInput::new_with_x11_lease(driver, lease))
+        })
+    }
+
+    fn initialize(
+        create_input: impl FnOnce() -> Result<DriverInput, BackendError>,
+    ) -> Result<Self, BackendError> {
         super::platform::prepare_thread()?;
-        // Fails with a descriptive error when there is no usable primary
-        // display (headless session, RDP with no console, etc.).
-        #[cfg(not(target_os = "windows"))]
+        let input = create_input()?;
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
         capture::target_screen()?;
         #[cfg(target_os = "windows")]
-        let mut display = super::display::DisplayProvider::new(
-            rpa_windows_display::GdiProvider::attach().map_err(super::display::provider_error)?,
-        )?;
-        #[cfg(target_os = "windows")]
+        let source =
+            rpa_windows_display::GdiProvider::attach().map_err(super::display::provider_error)?;
+        #[cfg(target_os = "linux")]
+        let source = super::linux_display::X11Provider::attach()?;
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
+        let mut display = super::display::DisplayProvider::new(source)?;
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         display.snapshot()?;
-        let driver = super::platform::create_driver()?;
         Ok(Self {
-            core: BackendCore::new(DriverInput::new(driver)),
-            #[cfg(target_os = "windows")]
+            core: BackendCore::new(input),
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
             display,
         })
     }
 }
 
 impl Backend for DesktopBackend {
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn display_selections(&self) -> &'static [&'static str] {
         &["primary", "id", "desktop"]
     }
@@ -79,18 +106,18 @@ impl Backend for DesktopBackend {
     fn geometry(&mut self) -> Result<Geometry, BackendError> {
         // Pure query: reflects current display layout/DPI. Input is neither
         // performed nor implied by success.
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         {
             self.display.geometry()
         }
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
         {
             Ok(capture::target_screen()?.geometry())
         }
     }
 
     fn capture(&mut self) -> Result<Capture, BackendError> {
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         {
             let c = self
                 .display
@@ -102,7 +129,7 @@ impl Backend for DesktopBackend {
                 geometry: c.geometry,
             })
         }
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
         {
             let target: TargetScreen = capture::target_screen()?;
             let geometry = target.geometry();
@@ -115,20 +142,20 @@ impl Backend for DesktopBackend {
             })
         }
     }
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn display_snapshot(
         &mut self,
     ) -> Result<Option<rpa_display_topology::TopologySnapshot>, BackendError> {
         self.display.snapshot().map(Some)
     }
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn select_display(
         &mut self,
         s: &rpa_display_topology::Selection,
     ) -> Result<Geometry, BackendError> {
         self.display.select(s)
     }
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn capture_display(
         &mut self,
         b: rpa_display_topology::CaptureBudget,

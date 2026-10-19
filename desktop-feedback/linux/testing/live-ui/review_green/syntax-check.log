@@ -1,0 +1,20 @@
+Python 3.14.0; syntax/bytecode only, no imports/tests/runtime.
+case.py: syntax OK; authored tests=0
+cases_shutdown.py: syntax OK; authored tests=0
+cases_ui.py: syntax OK; authored tests=0
+ipc.py: syntax OK; authored tests=0
+owned.py: syntax OK; authored tests=0
+proof.py: syntax OK; authored tests=0
+review_red/support.py: syntax OK; authored tests=0
+review_red/test_backpressure_red.py: syntax OK; authored tests=6
+review_red/test_ring_red.py: syntax OK; authored tests=5
+review_red/test_timestamps_red.py: syntax OK; authored tests=2
+rules.py: syntax OK; authored tests=0
+run.py: syntax OK; authored tests=0
+tests/test_acceptance.py: syntax OK; authored tests=8
+tests/test_resources.py: syntax OK; authored tests=5
+tests/test_rules.py: syntax OK; authored tests=4
+tests/test_wire.py: syntax OK; authored tests=10
+wire.py: syntax OK; authored tests=0
+Python authored tests=40; NOT RUN by this lane
+syntax_exit=0

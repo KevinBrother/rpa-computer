@@ -9,3 +9,7 @@ pub mod backend;
 pub mod feedback;
 pub mod mcp;
 pub mod runtime;
+
+// Shared credential acquisition is not a desktop/session authorization grant.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) mod x11_credentials;

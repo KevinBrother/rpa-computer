@@ -1,8 +1,8 @@
 //! Native emergency-stop hotkey registration (best effort, honestly reported).
 //!
 //! The host tries to register a global hotkey (Ctrl+Alt+Shift+Escape on
-//! macOS, Ctrl+Alt+F12 on Windows) in the *same interactive session* as the
-//! desktop it controls. Pressing it sets the shared cancellation flag
+//! macOS and Linux/X11, Ctrl+Alt+F12 on Windows) in the *same interactive
+//! session* as the desktop it controls. Pressing it sets the shared cancellation flag
 //! directly — independent of the MCP client, EOF, or process signals.
 //!
 //! Safety invariants:
@@ -64,12 +64,16 @@ pub struct HotkeyGuard {
 
 impl HotkeyGuard {
     pub fn status(&self) -> &HotkeyStatus {
+        #[cfg(target_os = "linux")]
+        if let Some(failure) = self.handle.as_ref().and_then(PlatformHandle::failure) {
+            return failure;
+        }
         &self.status
     }
 
-    /// True when dropping this guard releases the native registration.
-    /// When false (platform teardown unsupported), the registration stays
-    /// armed for process lifetime and `arm` must not be called again.
+    /// True when explicit `disarm` can release the native registration.
+    /// Dropping without `disarm` intentionally retains a successful registration
+    /// for process lifetime; callers must disarm before re-arming.
     pub fn disarm_supported(&self) -> bool {
         self.handle.is_some()
     }
@@ -81,9 +85,9 @@ impl HotkeyGuard {
     /// at process exit).
     pub fn disarm(&mut self) {
         if let Some(handle) = self.handle.take() {
-            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
             handle.disarm();
-            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
             match handle {}
         }
         if self.status.is_armed() {
@@ -96,9 +100,11 @@ impl HotkeyGuard {
 type PlatformHandle = macos::Registration;
 #[cfg(target_os = "windows")]
 type PlatformHandle = windows::Registration;
+#[cfg(target_os = "linux")]
+type PlatformHandle = x11::Registration;
 /// Never constructed on unsupported platforms: `platform_arm` always errors
 /// there, so no handle can exist.
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 enum PlatformHandle {}
 
 /// Try to arm the emergency hotkey. Never panics; on any failure returns a
@@ -593,12 +599,24 @@ mod windows {
     }
 }
 
+// ---- Linux / native X11 -------------------------------------------------
+
+#[cfg(any(target_os = "linux", test))]
+const LINUX_SHORTCUT_DESCRIPTION: &str = "Ctrl+Alt+Shift+Escape (Linux/X11 session)";
+
+#[cfg(target_os = "linux")]
+fn platform_arm(cancel: Arc<AtomicBool>) -> Result<(&'static str, PlatformHandle), HotkeyStatus> {
+    x11::arm(cancel)
+        .map(|registration| (LINUX_SHORTCUT_DESCRIPTION, registration))
+        .map_err(HotkeyStatus::Failed)
+}
+
 // ---- Other platforms -----------------------------------------------------
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 fn platform_arm(_cancel: Arc<AtomicBool>) -> Result<(&'static str, PlatformHandle), HotkeyStatus> {
     Err(HotkeyStatus::Unsupported(
-        "emergency hotkey is implemented only for macOS and Windows builds",
+        "emergency hotkey is implemented only for macOS, Windows and Linux/X11 builds",
     ))
 }
 
@@ -682,3 +700,33 @@ mod tests {
             .contains("FAILED"));
     }
 }
+
+// Portable policy tests run on any host; native registration is Linux-only.
+#[cfg(any(target_os = "linux", test))]
+mod x11_candidate;
+#[cfg(any(target_os = "linux", test))]
+mod x11_delivery;
+#[cfg(test)]
+mod x11_delivery_tests;
+#[cfg(any(target_os = "linux", test))]
+mod x11_lifecycle;
+#[cfg(test)]
+mod x11_lifecycle_tests;
+#[cfg(any(target_os = "linux", test))]
+mod x11_plan;
+#[cfg(test)]
+mod x11_shortcut_tests;
+
+#[cfg(test)]
+mod x11_plan_tests;
+#[cfg(all(test, target_os = "linux"))]
+mod x11_registration_tests;
+
+#[cfg(target_os = "linux")]
+mod x11;
+#[cfg(any(target_os = "linux", test))]
+mod x11_auth;
+#[cfg(test)]
+mod x11_auth_tests;
+#[cfg(test)]
+mod x11_default_map_tests;

@@ -33,6 +33,10 @@ pub(crate) mod dispatch;
 mod dispatch_core;
 pub mod display;
 pub mod keys;
+#[cfg(any(target_os = "linux", test))]
+mod linux_clipboard;
+#[cfg(any(target_os = "linux", test))]
+mod linux_display;
 #[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
 mod live_test;
 #[cfg(target_os = "windows")]

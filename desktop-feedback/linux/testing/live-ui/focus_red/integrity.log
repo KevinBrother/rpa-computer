@@ -1,0 +1,6 @@
+Read-only hash/diff audit; NO tests executed.
+Old fixture41 differences: ['desktop-feedback/linux/testing/live-ui/case.py', 'desktop-feedback/linux/testing/live-ui/review_red/support.py']
+Old45 assertions: all8 test-source files byte-identical.
+Support delta: explicit focus_start=0 only; no assertions changed.
+Product76: all76 byte-identical.
+Observer/rules/ipc/environment/dependencies unchanged.

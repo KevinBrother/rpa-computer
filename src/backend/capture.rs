@@ -60,20 +60,24 @@ impl std::error::Error for ScreenCaptureError {}
 /// Enumerate displays and pick the primary one, computing expected capture
 /// dimensions. Called on every geometry()/capture() so display changes are
 /// always observed live.
+#[cfg(not(target_os = "linux"))]
 pub fn target_screen() -> Result<TargetScreen, ScreenCaptureError> {
     let screens = screenshots::Screen::all()
         .map_err(|e| ScreenCaptureError::NoDisplay(format!("failed to enumerate displays: {e}")))?;
-    let primary = screens
-        .into_iter()
-        .find(|s| s.display_info.is_primary)
-        .ok_or_else(|| ScreenCaptureError::NoDisplay("no primary display found".to_string()))?;
-    let info = primary.display_info;
+    let primary = primary_display_index(
+        &screens
+            .iter()
+            .map(|s| s.display_info.is_primary)
+            .collect::<Vec<_>>(),
+    )?;
+    let info = screens[primary].display_info;
     let scale = if info.scale_factor.is_finite() && info.scale_factor > 0.0 {
         info.scale_factor
     } else {
         1.0
     };
-    let (capture_width, capture_height) = expected_capture_size(info.width, info.height, scale);
+    let (capture_width, capture_height) =
+        expected_capture_size_for_platform(std::env::consts::OS, info.width, info.height, scale);
     if capture_width == 0 || capture_height == 0 || info.width == 0 || info.height == 0 {
         return Err(ScreenCaptureError::Failed(format!(
             "display {} has degenerate dimensions ({}x{} input, {}x{} capture)",
@@ -86,6 +90,50 @@ pub fn target_screen() -> Result<TargetScreen, ScreenCaptureError> {
         capture_height,
         scale_factor: scale,
     })
+}
+
+/// Legacy primary descriptor API; Linux facts still come from native RandR,
+/// never display-info's Xft-scaled logical geometry. Runtime uses DisplayProvider.
+#[cfg(target_os = "linux")]
+pub fn target_screen() -> Result<TargetScreen, ScreenCaptureError> {
+    super::linux_display::X11Provider::attach()
+        .and_then(|mut provider| provider.primary_target())
+        .map_err(|error| ScreenCaptureError::NoDisplay(error.to_string()))
+}
+
+/// Choose one actual primary, or the only active display when RandR omits it.
+/// Multiple active displays without a unique primary are ambiguous, not an
+/// invitation to silently choose the server's enumeration order.
+pub(crate) fn primary_display_index(primary_flags: &[bool]) -> Result<usize, ScreenCaptureError> {
+    let mut primaries = primary_flags
+        .iter()
+        .enumerate()
+        .filter(|(_, primary)| **primary);
+    match (primaries.next(), primaries.next()) {
+        (Some((index, _)), None) => Ok(index),
+        (None, None) if primary_flags.len() == 1 => Ok(0),
+        (None, None) => Err(ScreenCaptureError::NoDisplay(
+            "no unique primary display".into(),
+        )),
+        _ => Err(ScreenCaptureError::NoDisplay(
+            "multiple primary displays".into(),
+        )),
+    }
+}
+
+/// Linux RandR bounds and X11 GetImage dimensions are root pixels. Xft font DPI
+/// is not a coordinate transform. Other legacy capture APIs use backing scale.
+pub(crate) fn expected_capture_size_for_platform(
+    platform: &str,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> (u32, u32) {
+    if platform == "linux" {
+        (width, height)
+    } else {
+        expected_capture_size(width, height, scale_factor)
+    }
 }
 
 /// Expected capture pixel dimensions for a display. See the [`TargetScreen`]

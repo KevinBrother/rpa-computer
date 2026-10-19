@@ -28,10 +28,11 @@
 //! guarantees. Explicit low-level release calls for items this session never
 //! pressed remain the caller's responsibility (documented, not prevented).
 //!
-//! Note on X11: text injection there is RESTRICTED — only characters mapped
-//! in the current keymap without Shift are accepted; unmapped or
-//! shifted-only characters are rejected honestly with `invalid_text`. See
-//! the crate README.
+//! On X11, exact existing bindings or stable per-session XKB leases represent
+//! native Unicode without clipboard fallback. Vacant-key capacity is bounded;
+//! conflicting modifier/group state or lost mapping ownership fails explicitly.
+//! `release_all` also performs retryable mapping/scalar-release cleanup, even
+//! when no public key/button is tracked. Dispatch is not application receipt.
 
 use std::collections::{HashMap, HashSet};
 
@@ -168,8 +169,9 @@ impl Input {
 
     /// Inject one Unicode scalar as text. `'\n'` and `'\r'` each produce ONE
     /// Return click (CRLF is normalized by the caller before scalars reach
-    /// here); `'\t'` produces ONE Tab click. NUL is rejected. Return/Tab
-    /// clicks go through the same held-state machine as explicit keys.
+    /// here); `'\t'` produces ONE Tab click. NUL and matching preexisting
+    /// Return/Tab holds are rejected. Opted-in drivers (Linux) own the scalar
+    /// safety path; other platforms retain the tracked explicit-key click.
     pub fn text_scalar(&mut self, ch: char) -> Result<()> {
         if ch == '\0' {
             return Err(InputError::new(
@@ -177,11 +179,23 @@ impl Input {
                 "text contains a NUL character",
             ));
         }
-        match ch {
-            '\n' | '\r' => self.click_key(Key::Return),
-            '\t' => self.click_key(Key::Tab),
-            _ => self.driver.text_scalar(ch),
+        let control = match ch {
+            '\n' | '\r' => Some(Key::Return),
+            '\t' => Some(Key::Tab),
+            _ => None,
+        };
+        if let Some(key) = control {
+            if self.held_keys.contains(&key) {
+                return Err(InputError::new(
+                    "input_failed",
+                    format!("native text would consume an existing {} hold", key.name()),
+                ));
+            }
+            if !self.driver.control_text_uses_scalar() {
+                return self.click_key(key);
+            }
         }
+        self.driver.text_scalar(ch)
     }
 
     /// One key click (press + release) through the held-state machine: the
@@ -229,13 +243,18 @@ impl Input {
                 }
             }
         }
+        // Native scalar releases and mapping leases are not represented in
+        // the wrapper's held set. Always attempt the fallible resource seam.
+        if let Err(error) = self.driver.cleanup() {
+            failures.push(format!("native cleanup: {}", error.message));
+        }
         if failures.is_empty() {
             Ok(())
         } else {
             Err(InputError::new(
                 "input_failed",
                 format!(
-                    "release_all: {} item(s) failed to release (still tracked, will be retried): {}",
+                    "release_all: {} cleanup operation(s) failed (unresolved state retained for retry): {}",
                     failures.len(),
                     failures.join("; ")
                 ),
@@ -261,21 +280,10 @@ impl Input {
 
 impl Drop for Input {
     fn drop(&mut self) {
-        // Best-effort, intentionally silent: errors are only reportable
-        // through the explicit `release_all` path.
-        let mut buttons: Vec<(Button, u8)> =
-            self.held_buttons.iter().map(|(b, c)| (*b, *c)).collect();
-        buttons.sort_by_key(|(b, _)| format!("{b:?}"));
-        for (button, count) in buttons {
-            let _ = self.driver.button(button, Direction::Release, count);
-        }
-        let mut keys: Vec<Key> = self.held_keys.iter().copied().collect();
-        keys.sort_by_key(|k| k.name());
-        for key in keys {
-            let _ = self.driver.key(key, Direction::Release);
-        }
-        self.held_keys.clear();
-        self.held_buttons.clear();
+        // Best-effort only. Observable cleanup outcomes come from release_all;
+        // do not infer success from destruction. Failed native resources remain
+        // owned by the driver for its final best-effort retry.
+        let _ = self.release_all();
     }
 }
 
@@ -868,3 +876,11 @@ mod tests {
         assert!(input.held_snapshot().is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "session/cleanup_tests.rs"]
+mod cleanup_tests;
+
+#[cfg(test)]
+#[path = "session/control_text_tests.rs"]
+mod control_text_tests;

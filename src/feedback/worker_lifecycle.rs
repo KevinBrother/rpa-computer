@@ -8,6 +8,15 @@ impl Worker {
         config: crate::feedback::FeedbackConfig,
         shutdown: Option<Arc<AtomicBool>>,
     ) -> Result<Self, WorkerError> {
+        Self::start_config_with_init_budget(factory, config, shutdown, INITIALIZATION_TIMEOUT)
+    }
+
+    pub(super) fn start_config_with_init_budget(
+        factory: BackendFactory,
+        config: crate::feedback::FeedbackConfig,
+        shutdown: Option<Arc<AtomicBool>>,
+        init_budget: Duration,
+    ) -> Result<Self, WorkerError> {
         let cancel = Arc::new(AtomicBool::new(false));
         let generation = RequestGeneration::new();
         let (tx, rx) = sync_channel::<Command>(MAX_QUEUED_COMMANDS);
@@ -33,7 +42,7 @@ impl Worker {
             (None, None)
         };
         let native_feedback = feedback.clone();
-        let (init_tx, init_rx) = channel::<Result<(), BackendError>>();
+        let (init_tx, init_rx) = channel::<Result<(), WorkerError>>();
         let session_started = Arc::new(Mutex::new(None::<Instant>));
         let shutdown_status = Arc::new(Mutex::new(None::<ShutdownStatus>));
         let stash_len = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -43,6 +52,7 @@ impl Worker {
         let status_for_thread = Arc::clone(&shutdown_status);
         let stash_for_thread = Arc::clone(&stash_len);
 
+        let init_deadline = Instant::now() + init_budget;
         let join = std::thread::Builder::new()
             .name("computer-runtime".into())
             .spawn(move || {
@@ -52,6 +62,7 @@ impl Worker {
                     ctrl_rx,
                     init_tx,
                     CoordShared {
+                        init_deadline,
                         cancel: cancel_for_thread,
                         generation: generation_for_thread,
                         session_started: started_for_thread,
@@ -63,8 +74,13 @@ impl Worker {
             })
             .map_err(|_| WorkerError::Dead)?;
 
-        match init_rx.recv() {
-            Ok(Ok(())) => {
+        // Independent outer bound: even a coordinator failure cannot strand
+        // Worker::start. The small confirmation grace lets the coordinator
+        // publish its native deadline classification, not extend native setup.
+        let outer_wait =
+            init_deadline.saturating_duration_since(Instant::now()) + WATCHDOG_POLL * 2;
+        match init_rx.recv_timeout(outer_wait) {
+            Ok(Ok(())) if Instant::now() < init_deadline && !cancel.load(Ordering::SeqCst) => {
                 let transport_gate = TransportGate::new();
                 let active = transport_gate.active_view();
                 Ok(Worker {
@@ -85,16 +101,27 @@ impl Worker {
                     feedback_host: Mutex::new(feedback_host),
                 })
             }
-            Ok(Err(e)) => {
-                let _ = join.join();
-                Err(WorkerError::BackendUnavailable {
-                    code: e.code,
-                    message: e.message,
-                })
-            }
-            Err(_) => {
-                let _ = join.join();
-                Err(WorkerError::Dead)
+            result => {
+                generation.bump();
+                cancel.store(true, Ordering::SeqCst);
+                let _ = ctrl_tx.send(Control::Quit);
+                // Close both ends exposed to the starter before returning.
+                // There is no Worker handle through which late work can enter.
+                drop(tx);
+                drop(init_rx);
+                if join.is_finished() && join.join().is_err() {
+                    return Err(native::init_uncertain(
+                        "initialization_coordinator_panicked",
+                        "coordinator panicked during startup",
+                    ));
+                }
+                match result {
+                    Ok(Err(e)) => Err(e),
+                    _ => Err(native::init_uncertain(
+                        "initialization_unconfirmed",
+                        "readiness was not confirmed within the startup budget",
+                    )),
+                }
             }
         }
     }
